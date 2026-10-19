@@ -1,0 +1,9 @@
+# Cluster exports for routes-to-api-values.py (contain internal hostnames and service details)
+cluster.json
+*.cluster.json
+# Python
+__pycache__/
+# Helm
+charts/*/charts/
+*.tgz
+.DS_Store
