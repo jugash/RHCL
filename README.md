@@ -17,7 +17,7 @@ Target: OpenShift 4.19+ on-prem, with MetalLB (or another LoadBalancer provider)
 bootstrap/bootstrap.sh  (run once by hand)
   └─ OpenShift GitOps operator + RBAC + health checks
      └─ rhcl-root Application  ──renders──  gitops/ (app-of-apps chart)
-          wave 0  rhcl-operators     charts/rhcl-operators   + site/operators-values.yaml
+          wave 0  rhcl-operators     charts/rhcl-operators   + site/operators-values.yaml  (OSSM 3 → servicemesh-operator, RHCL → kuadrant-system)
           wave 0  external-secrets   upstream ESO chart 2.12.0
           wave 1  rhcl-platform      charts/rhcl-platform    + site/platform-values.yaml
           wave 1  vault-store        charts/vault-store      + site/vault-store-values.yaml
@@ -267,7 +267,17 @@ Not converted automatically:
 
 ## Notes
 
-- **Don't create** a GatewayClass with `controllerName: openshift.io/gateway-controller/v1`. That makes OpenShift install a second, gateway-only Istio that is not part of this mesh.
+- **Don't create** a GatewayClass with `controllerName: openshift.io/gateway-controller/v1`. That makes OpenShift install a second, gateway-only Istio that is not part of this mesh, and the ingress operator tries to subscribe to Service Mesh 3 in `openshift-operators`, which clashes with this repo's subscription.
+- **Operator namespaces.** Nothing goes into `openshift-operators`:
+
+| Operator | Namespace |
+|---|---|
+| Service Mesh 3 | `servicemesh-operator` (`serviceMesh.namespace`) |
+| Connectivity Link | `kuadrant-system` |
+| OpenShift GitOps | `openshift-gitops-operator` |
+| External Secrets | `external-secrets` |
+
+  If Service Mesh 3 is already installed in another namespace, delete that Subscription and CSV first. OLM allows only one copy of an operator per cluster.
 - **Argo CD permissions.** The `openshift-gitops` instance gets cluster-admin because it installs operators and cluster-scoped resources. Give application teams their own namespace-scoped Argo CD instance, or limit them with AppProjects.
 - **NetworkPolicies.** In namespaces that have them, allow ingress from `api-gateway`. The Istio sidecars also need to reach `istio-system`.
 - **Pruning safety.** Subscriptions and namespaces carry `argocd.argoproj.io/sync-options: Delete=false`, so removing something from Git never uninstalls the operators or deletes a namespace.

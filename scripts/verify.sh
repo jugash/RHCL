@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Check each layer of the install and report what is not ready yet.
 #   verify.sh [gateway-namespace] [gateway-name]
+# MESH_OPERATOR_NS overrides the Service Mesh operator namespace (serviceMesh.namespace in rhcl-operators).
 set -uo pipefail
 
 gw_ns=${1:-api-gateway}
 gw=${2:-api-gateway}
+mesh_ns=${MESH_OPERATOR_NS:-servicemesh-operator}
 fail=0
 
 check() {
@@ -18,7 +20,7 @@ check() {
 }
 
 echo "Operators"
-check "Service Mesh 3 operator" oc wait csv -n openshift-operators -l operators.coreos.com/servicemeshoperator3.openshift-operators --for=jsonpath='{.status.phase}'=Succeeded --timeout=10s
+check "Service Mesh 3 operator" oc wait csv -n "$mesh_ns" -l operators.coreos.com/servicemeshoperator3."$mesh_ns" --for=jsonpath='{.status.phase}'=Succeeded --timeout=10s
 check "Connectivity Link operator" oc wait csv -n kuadrant-system -l operators.coreos.com/rhcl-operator.kuadrant-system --for=jsonpath='{.status.phase}'=Succeeded --timeout=10s
 
 echo "Mesh"

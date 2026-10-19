@@ -3,6 +3,10 @@ installPlanApproval: Automatic
 
 serviceMesh:
   enabled: true
+  # Dedicated namespace (not openshift-operators). The operator still watches all namespaces.
+  # If OSSM 3 is already installed elsewhere on the cluster, remove that Subscription first:
+  # OLM does not allow the same operator to be installed twice cluster-wide.
+  namespace: servicemesh-operator
   channel: stable
   source: redhat-operators
 
