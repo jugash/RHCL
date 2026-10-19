@@ -1,0 +1,14 @@
+# This Argo CD instance installs operators, cluster-scoped CRs and namespaces, so it needs
+# cluster-admin. Keep it for platform work and give app teams a separate, namespace-scoped instance.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: openshift-gitops-cluster-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: openshift-gitops-argocd-application-controller
+    namespace: openshift-gitops

@@ -1,0 +1,10 @@
+Gateway {{ .Values.gateway.namespace }}/{{ .Values.gateway.name }} is being created.
+
+1. Wait for it to be programmed and read its LoadBalancer address:
+   oc wait gateway/{{ .Values.gateway.name }} -n {{ .Values.gateway.namespace }} --for=condition=Programmed --timeout=5m
+   oc get gateway {{ .Values.gateway.name }} -n {{ .Values.gateway.namespace }} -o jsonpath='{.status.addresses[0].value}'
+
+2. In your DNS, point {{ .Values.gateway.hostname }} at that address.
+
+3. Check that the policies are enforced:
+   oc get tlspolicy,authpolicy,ratelimitpolicy -n {{ .Values.gateway.namespace }}

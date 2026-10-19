@@ -1,0 +1,21 @@
+{{- if not .Values.repoURL }}{{ fail "repoURL is required" }}{{ end -}}
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: rhcl
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    {{- include "gitops.wave" -1 | nindent 4 }}
+spec:
+  description: Connectivity Link platform and APIs
+  sourceRepos:
+    - {{ .Values.repoURL }}
+    {{- if .Values.externalSecrets.enabled }}
+    - https://charts.external-secrets.io
+    {{- end }}
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: "*"
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"

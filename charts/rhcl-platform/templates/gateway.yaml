@@ -1,0 +1,40 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.gateway.name }}
+  namespace: {{ .Values.gateway.namespace }}
+spec:
+  gatewayClassName: istio
+  {{- with .Values.gateway.serviceAnnotations }}
+  infrastructure:
+    annotations:
+      {{- toYaml . | nindent 6 }}
+  {{- end }}
+  listeners:
+    {{- if .Values.gateway.httpRedirect }}
+    # Only the redirect route (same namespace) may attach to plain HTTP.
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- end }}
+    {{- range $l := include "platform.httpsListeners" . | fromYamlArray }}
+    - name: {{ $l.name }}
+      protocol: HTTPS
+      port: 443
+      hostname: {{ $l.hostname | quote }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          # Created by the TLSPolicy through cert-manager.
+          - kind: Secret
+            name: {{ $.Values.gateway.name }}-{{ $l.name }}-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              {{- toYaml $.Values.gateway.accessLabel | nindent 14 }}
+    {{- end }}

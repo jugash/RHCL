@@ -1,0 +1,12 @@
+# Set by bootstrap/root-app.yaml.
+repoURL: ""
+revision: main
+
+# External Secrets Operator (upstream chart), used to sync API keys from Vault.
+externalSecrets:
+  enabled: true
+  chartVersion: 2.12.0
+
+# One Argo CD Application per apis/<namespace>/<api>.yaml.
+apis:
+  enabled: true

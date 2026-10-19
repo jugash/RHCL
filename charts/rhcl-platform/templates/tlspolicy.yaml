@@ -1,0 +1,13 @@
+{{- if .Values.tls.enabled }}
+# Issues one certificate per HTTPS listener through cert-manager.
+apiVersion: kuadrant.io/v1
+kind: TLSPolicy
+metadata:
+  name: {{ .Values.gateway.name }}-tls
+  namespace: {{ .Values.gateway.namespace }}
+spec:
+  targetRef:
+    {{- include "platform.gatewayRef" . | nindent 4 }}
+  issuerRef:
+    {{- toYaml .Values.tls.issuer | nindent 4 }}
+{{- end }}

@@ -1,0 +1,24 @@
+# The only Application created by hand (bootstrap.sh fills in REPO_URL and REVISION).
+# It renders gitops/, which creates every other Application.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rhcl-root
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: ${REPO_URL}
+    targetRevision: ${REVISION}
+    path: gitops
+    helm:
+      valuesObject:
+        repoURL: ${REPO_URL}
+        revision: ${REVISION}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openshift-gitops
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

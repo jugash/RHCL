@@ -1,0 +1,11 @@
+# helm upgrade --install echo-api charts/api -n echo-api -f charts/api/values-demo.yaml
+hostnames:
+  - echo.api.example.internal
+demo:
+  enabled: true
+auth:
+  mode: protected
+  apiKey:
+    enabled: true
+  oidc:
+    enabled: false   # true once issuerUrl points at your IdP

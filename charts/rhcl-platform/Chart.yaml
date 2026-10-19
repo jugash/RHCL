@@ -1,0 +1,5 @@
+apiVersion: v2
+name: rhcl-platform
+description: Istio sidecar mesh, Kuadrant, a shared API gateway and its default TLS/auth/rate-limit policies
+type: application
+version: 0.1.0

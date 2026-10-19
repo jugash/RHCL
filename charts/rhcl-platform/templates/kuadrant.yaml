@@ -1,0 +1,10 @@
+{{- if .Values.kuadrant.enabled }}
+# Instantiates Authorino (auth), Limitador (rate limiting) and the policy controllers,
+# and wires them into the Istio gateway.
+apiVersion: kuadrant.io/v1beta1
+kind: Kuadrant
+metadata:
+  name: kuadrant
+  namespace: {{ .Release.Namespace }}
+spec: {}
+{{- end }}

@@ -1,0 +1,9 @@
+{{- range $ns := list "istio-system" "istio-cni" .Values.gateway.namespace }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  annotations:
+    helm.sh/resource-policy: keep
+{{- end }}

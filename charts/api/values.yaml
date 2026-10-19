@@ -1,0 +1,69 @@
+# Name of the HTTPRoute and policies. Defaults to the release name.
+nameOverride: ""
+
+gateway:
+  name: api-gateway
+  namespace: api-gateway
+  # Listener to attach to. Use the extraListeners name for a legacy hostname.
+  sectionName: https
+
+# Must fall under the listener's hostname, e.g. *.api.example.internal.
+hostnames: []
+#  - orders.api.example.internal
+
+# Plain Gateway API HTTPRoute rules, passed through as-is.
+# Left empty with demo.enabled=true, they default to the demo backend.
+rules: []
+#  - matches:
+#      - path: {type: PathPrefix, value: /}
+#    backendRefs:
+#      - name: orders
+#        port: 8080
+
+auth:
+  # protected - require an API key and/or OIDC JWT (below)
+  # public    - anonymous access; explicitly opts out of the gateway's deny-all default
+  # none      - render no AuthPolicy, so the gateway default (deny-all) applies
+  mode: protected
+
+  apiKey:
+    enabled: true
+    # Header format: "Authorization: APIKEY <key>".
+    prefix: APIKEY
+    # Labels on the key Secrets in kuadrant-system. Empty = {api: <name>}.
+    # scripts/create-api-key.sh creates Secrets with these labels.
+    selectorLabels: {}
+
+  oidc:
+    enabled: false
+    # Header format: "Authorization: Bearer <jwt>".
+    issuerUrl: https://sso.example.internal/realms/api
+    # If set, a token's "aud" claim must contain this value.
+    audience: ""
+    # JWT claim holding the caller's rate-limit plan. Tokens without it get defaultPlan.
+    planClaim: plan
+
+  # Plan for API keys without a secret.kuadrant.io/plan-id annotation, and JWTs without planClaim.
+  defaultPlan: free
+
+rateLimit:
+  enabled: true
+  # Per-caller limits by plan. Ignored unless auth.mode=protected (it needs a caller identity).
+  perUser:
+    enabled: true
+    plans:
+      free:
+        limit: 60
+        window: 1m
+      gold:
+        limit: 1000
+        window: 1m
+  # Cap for the whole route, across all callers. Set to null to disable.
+  total:
+    limit: 5000
+    window: 1m
+
+# A small echo backend for trying out the gateway.
+demo:
+  enabled: false
+  image: quay.io/kuadrant/authorino-examples:talker-api

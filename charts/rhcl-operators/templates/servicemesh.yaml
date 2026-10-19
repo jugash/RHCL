@@ -1,0 +1,17 @@
+{{- if .Values.serviceMesh.enabled }}
+# OpenShift Service Mesh 3 (Sail-based Istio operator), cluster-wide.
+# openshift-operators already has a global OperatorGroup.
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: servicemeshoperator3
+  namespace: openshift-operators
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  channel: {{ .Values.serviceMesh.channel }}
+  name: servicemeshoperator3
+  source: {{ .Values.serviceMesh.source }}
+  sourceNamespace: openshift-marketplace
+  installPlanApproval: {{ .Values.installPlanApproval }}
+{{- end }}

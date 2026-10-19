@@ -1,0 +1,13 @@
+# Use Manual in production so operator upgrades need an approved InstallPlan.
+installPlanApproval: Automatic
+
+serviceMesh:
+  enabled: true
+  channel: stable
+  source: redhat-operators
+
+# Installed into the release namespace (use kuadrant-system).
+connectivityLink:
+  enabled: true
+  channel: stable
+  source: redhat-operators

@@ -1,0 +1,43 @@
+# Required on OpenShift for sidecar mode (replaces the privileged istio-init container).
+apiVersion: sailoperator.io/v1
+kind: IstioCNI
+metadata:
+  name: default
+spec:
+  namespace: istio-cni
+  {{- with .Values.mesh.version }}
+  version: {{ . }}
+  {{- end }}
+---
+# One control plane for both the sidecar mesh and the gateway. Because the gateway is part of
+# the mesh, gateway -> app traffic is mutual TLS automatically.
+# Named "default" so the plain `istio-injection: enabled` namespace label works.
+# istiod creates the `istio` GatewayClass.
+#
+# Do NOT also create a GatewayClass with controllerName openshift.io/gateway-controller/v1:
+# that makes the OpenShift ingress operator start a second, gateway-only Istio.
+apiVersion: sailoperator.io/v1
+kind: Istio
+metadata:
+  name: default
+spec:
+  namespace: istio-system
+  {{- with .Values.mesh.version }}
+  version: {{ . }}
+  {{- end }}
+  updateStrategy:
+    type: InPlace
+  values:
+    meshConfig:
+      {{- if .Values.mesh.accessLogs }}
+      accessLogFile: /dev/stdout
+      {{- end }}
+---
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system
+spec:
+  mtls:
+    mode: {{ .Values.mesh.mtlsMode }}

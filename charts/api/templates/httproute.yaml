@@ -1,0 +1,27 @@
+{{- include "api.validate" . -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "api.name" . }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ .Values.gateway.name }}
+      namespace: {{ .Values.gateway.namespace }}
+      {{- with .Values.gateway.sectionName }}
+      sectionName: {{ . }}
+      {{- end }}
+  hostnames:
+    {{- toYaml .Values.hostnames | nindent 4 }}
+  rules:
+    {{- if .Values.rules }}
+    {{- toYaml .Values.rules | nindent 4 }}
+    {{- else }}
+    - backendRefs:
+        - name: {{ include "api.name" . }}-demo
+          port: 80
+    {{- end }}

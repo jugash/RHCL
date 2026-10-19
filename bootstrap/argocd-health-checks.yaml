@@ -1,0 +1,176 @@
+# Merged into the openshift-gitops ArgoCD CR by bootstrap.sh.
+spec:
+  resourceHealthChecks:
+    - group: argoproj.io
+      kind: Application
+      check: |
+        hs = {status = "Progressing", message = ""}
+        if obj.status ~= nil and obj.status.health ~= nil then
+          hs.status = obj.status.health.status
+          hs.message = obj.status.health.message or ""
+        end
+        return hs
+    - group: operators.coreos.com
+      kind: Subscription
+      check: |
+        hs = {status = "Progressing", message = "Waiting for the operator to install"}
+        if obj.status ~= nil and obj.status.installedCSV ~= nil then
+          if obj.status.state == "AtLatestKnown" or obj.status.state == "UpgradePending" then
+            hs.status = "Healthy"
+            hs.message = obj.status.installedCSV
+          end
+        end
+        return hs
+    - group: sailoperator.io
+      kind: Istio
+      check: |
+        hs = {status = "Progressing", message = "Waiting for Ready"}
+        if obj.status ~= nil and obj.status.conditions ~= nil then
+          for _, c in ipairs(obj.status.conditions) do
+            if c.type == "Ready" then
+              hs.message = c.message or c.reason or ""
+              if c.status == "True" then
+                hs.status = "Healthy"
+              elseif c.status == "False" and c.reason ~= "Pending" then
+                hs.status = "Progressing"
+              end
+            end
+          end
+        end
+        return hs
+    - group: sailoperator.io
+      kind: IstioCNI
+      check: |
+        hs = {status = "Progressing", message = "Waiting for Ready"}
+        if obj.status ~= nil and obj.status.conditions ~= nil then
+          for _, c in ipairs(obj.status.conditions) do
+            if c.type == "Ready" then
+              hs.message = c.message or c.reason or ""
+              if c.status == "True" then
+                hs.status = "Healthy"
+              elseif c.status == "False" and c.reason ~= "Pending" then
+                hs.status = "Progressing"
+              end
+            end
+          end
+        end
+        return hs
+    - group: kuadrant.io
+      kind: Kuadrant
+      check: |
+        hs = {status = "Progressing", message = "Waiting for Ready"}
+        if obj.status ~= nil and obj.status.conditions ~= nil then
+          for _, c in ipairs(obj.status.conditions) do
+            if c.type == "Ready" then
+              hs.message = c.message or c.reason or ""
+              if c.status == "True" then
+                hs.status = "Healthy"
+              elseif c.status == "False" and c.reason ~= "Pending" then
+                hs.status = "Progressing"
+              end
+            end
+          end
+        end
+        return hs
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      check: |
+        hs = {status = "Progressing", message = "Waiting for Programmed"}
+        if obj.status ~= nil and obj.status.conditions ~= nil then
+          for _, c in ipairs(obj.status.conditions) do
+            if c.type == "Programmed" then
+              hs.message = c.message or c.reason or ""
+              if c.status == "True" then
+                hs.status = "Healthy"
+              elseif c.status == "False" and c.reason ~= "Pending" then
+                hs.status = "Progressing"
+              end
+            end
+          end
+        end
+        return hs
+    - group: kuadrant.io
+      kind: AuthPolicy
+      check: |
+        hs = {status = "Progressing", message = "Waiting for Accepted"}
+        if obj.status ~= nil and obj.status.conditions ~= nil then
+          for _, c in ipairs(obj.status.conditions) do
+            if c.type == "Accepted" then
+              hs.message = c.message or c.reason or ""
+              if c.status == "True" then
+                hs.status = "Healthy"
+              elseif c.status == "False" and c.reason ~= "Pending" then
+                hs.status = "Degraded"
+              end
+            end
+          end
+        end
+        return hs
+    - group: kuadrant.io
+      kind: RateLimitPolicy
+      check: |
+        hs = {status = "Progressing", message = "Waiting for Accepted"}
+        if obj.status ~= nil and obj.status.conditions ~= nil then
+          for _, c in ipairs(obj.status.conditions) do
+            if c.type == "Accepted" then
+              hs.message = c.message or c.reason or ""
+              if c.status == "True" then
+                hs.status = "Healthy"
+              elseif c.status == "False" and c.reason ~= "Pending" then
+                hs.status = "Degraded"
+              end
+            end
+          end
+        end
+        return hs
+    - group: kuadrant.io
+      kind: TLSPolicy
+      check: |
+        hs = {status = "Progressing", message = "Waiting for Accepted"}
+        if obj.status ~= nil and obj.status.conditions ~= nil then
+          for _, c in ipairs(obj.status.conditions) do
+            if c.type == "Accepted" then
+              hs.message = c.message or c.reason or ""
+              if c.status == "True" then
+                hs.status = "Healthy"
+              elseif c.status == "False" and c.reason ~= "Pending" then
+                hs.status = "Degraded"
+              end
+            end
+          end
+        end
+        return hs
+    - group: external-secrets.io
+      kind: ClusterSecretStore
+      check: |
+        hs = {status = "Progressing", message = "Waiting for Ready"}
+        if obj.status ~= nil and obj.status.conditions ~= nil then
+          for _, c in ipairs(obj.status.conditions) do
+            if c.type == "Ready" then
+              hs.message = c.message or c.reason or ""
+              if c.status == "True" then
+                hs.status = "Healthy"
+              elseif c.status == "False" and c.reason ~= "Pending" then
+                hs.status = "Degraded"
+              end
+            end
+          end
+        end
+        return hs
+    - group: external-secrets.io
+      kind: ExternalSecret
+      check: |
+        hs = {status = "Progressing", message = "Waiting for Ready"}
+        if obj.status ~= nil and obj.status.conditions ~= nil then
+          for _, c in ipairs(obj.status.conditions) do
+            if c.type == "Ready" then
+              hs.message = c.message or c.reason or ""
+              if c.status == "True" then
+                hs.status = "Healthy"
+              elseif c.status == "False" and c.reason ~= "Pending" then
+                hs.status = "Degraded"
+              end
+            end
+          end
+        end
+        return hs

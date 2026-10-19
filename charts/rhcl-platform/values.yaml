@@ -1,0 +1,47 @@
+mesh:
+  # Empty = the operator's default (newest supported) Istio version.
+  # After the first install, pin it: oc get istio default -o jsonpath='{.spec.version}'
+  version: ""
+  # PERMISSIVE while apps are still reached through OpenShift Routes as well.
+  # Switch to STRICT once every meshed app is served only through the gateway.
+  mtlsMode: PERMISSIVE
+  accessLogs: true
+
+# The Kuadrant CR goes into the release namespace (kuadrant-system).
+kuadrant:
+  enabled: true
+
+gateway:
+  name: api-gateway
+  namespace: api-gateway
+  # Wildcard hostname for new APIs. Point *.api.example.internal at the gateway's LB IP in your DNS.
+  hostname: "*.api.example.internal"
+  # Optional extra HTTPS listeners, e.g. to keep a legacy hostname that used to be an OpenShift Route:
+  #   - name: legacy-shop
+  #     hostname: shop.apps.ocp.example.internal
+  extraListeners: []
+  # Namespaces need this label before their HTTPRoutes can attach (scripts/onboard-namespace.sh adds it).
+  accessLabel:
+    api-gateway-access: "true"
+  # Passed to the generated LoadBalancer Service. Pin the IP so the DNS record stays valid, e.g.:
+  #   metallb.io/loadBalancerIPs: 10.0.0.50
+  serviceAnnotations: {}
+  # Redirect plain HTTP to HTTPS.
+  httpRedirect: true
+
+tls:
+  enabled: true
+  # Existing cert-manager issuer backed by your internal CA.
+  issuer:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: internal-ca
+
+# Defaults for every route on the gateway. A route that has its own AuthPolicy/RateLimitPolicy replaces these.
+defaults:
+  # Deny any route that has no AuthPolicy of its own, so nothing is exposed by accident.
+  denyAll: true
+  rateLimit:
+    enabled: true
+    limit: 100
+    window: 10s

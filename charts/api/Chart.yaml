@@ -1,0 +1,5 @@
+apiVersion: v2
+name: api
+description: Expose one API through the shared gateway - HTTPRoute plus Kuadrant AuthPolicy and RateLimitPolicy
+type: application
+version: 0.1.0

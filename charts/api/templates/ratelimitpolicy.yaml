@@ -1,0 +1,30 @@
+{{- $rl := .Values.rateLimit -}}
+{{- $perUser := and $rl.perUser.enabled (eq .Values.auth.mode "protected") -}}
+{{- if and $rl.enabled (or $perUser $rl.total) }}
+apiVersion: kuadrant.io/v1
+kind: RateLimitPolicy
+metadata:
+  name: {{ include "api.name" . }}
+spec:
+  targetRef:
+    {{- include "api.routeRef" . | nindent 4 }}
+  limits:
+    {{- if $perUser }}
+    {{- range $plan, $r := $rl.perUser.plans }}
+    plan-{{ $plan }}:
+      rates:
+        - limit: {{ $r.limit }}
+          window: {{ $r.window }}
+      counters:
+        - expression: auth.identity.userid
+      when:
+        - predicate: auth.identity.planid == '{{ $plan }}'
+    {{- end }}
+    {{- end }}
+    {{- with $rl.total }}
+    total:
+      rates:
+        - limit: {{ .limit }}
+          window: {{ .window }}
+    {{- end }}
+{{- end }}

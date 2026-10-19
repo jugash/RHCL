@@ -1,0 +1,44 @@
+# Wave 0: operators. Wave 1: mesh, Kuadrant, gateway and default policies.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rhcl-operators
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    {{- include "gitops.wave" 0 | nindent 4 }}
+spec:
+  project: rhcl
+  source:
+    repoURL: {{ .Values.repoURL }}
+    targetRevision: {{ .Values.revision }}
+    path: charts/rhcl-operators
+    helm:
+      valueFiles:
+        - ../../site/operators-values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kuadrant-system
+  syncPolicy:
+    {{- include "gitops.syncPolicy" dict | nindent 4 }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rhcl-platform
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    {{- include "gitops.wave" 1 | nindent 4 }}
+spec:
+  project: rhcl
+  source:
+    repoURL: {{ .Values.repoURL }}
+    targetRevision: {{ .Values.revision }}
+    path: charts/rhcl-platform
+    helm:
+      valueFiles:
+        - ../../site/platform-values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kuadrant-system
+  syncPolicy:
+    {{- include "gitops.syncPolicy" dict | nindent 4 }}

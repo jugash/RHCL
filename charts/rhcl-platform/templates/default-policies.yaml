@@ -1,0 +1,41 @@
+{{- if .Values.defaults.denyAll }}
+apiVersion: kuadrant.io/v1
+kind: AuthPolicy
+metadata:
+  name: {{ .Values.gateway.name }}-default-deny
+  namespace: {{ .Values.gateway.namespace }}
+spec:
+  targetRef:
+    {{- include "platform.gatewayRef" . | nindent 4 }}
+  defaults:
+    rules:
+      authorization:
+        deny-all:
+          opa:
+            rego: "allow = false"
+      response:
+        unauthorized:
+          headers:
+            content-type:
+              value: application/json
+          body:
+            value: |
+              {"error": "Forbidden", "message": "This route has no AuthPolicy. Access is denied by default."}
+{{- end }}
+{{- if .Values.defaults.rateLimit.enabled }}
+---
+apiVersion: kuadrant.io/v1
+kind: RateLimitPolicy
+metadata:
+  name: {{ .Values.gateway.name }}-default-limit
+  namespace: {{ .Values.gateway.namespace }}
+spec:
+  targetRef:
+    {{- include "platform.gatewayRef" . | nindent 4 }}
+  defaults:
+    limits:
+      default:
+        rates:
+          - limit: {{ .Values.defaults.rateLimit.limit }}
+            window: {{ .Values.defaults.rateLimit.window }}
+{{- end }}

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: rhcl-gitops
+description: App-of-apps for Connectivity Link - creates the Argo CD Applications in sync-wave order
+type: application
+version: 0.1.0

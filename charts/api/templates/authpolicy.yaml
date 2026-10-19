@@ -1,0 +1,68 @@
+{{- $name := include "api.name" . -}}
+{{- if ne .Values.auth.mode "none" }}
+apiVersion: kuadrant.io/v1
+kind: AuthPolicy
+metadata:
+  name: {{ $name }}
+spec:
+  targetRef:
+    {{- include "api.routeRef" . | nindent 4 }}
+  rules:
+    {{- if eq .Values.auth.mode "public" }}
+    authentication:
+      public:
+        anonymous: {}
+    {{- else }}
+    {{- $oidc := .Values.auth.oidc }}
+    {{- $default := .Values.auth.defaultPlan }}
+    authentication:
+      {{- if .Values.auth.apiKey.enabled }}
+      api-key:
+        apiKey:
+          selector:
+            matchLabels:
+              {{- toYaml (default (dict "api" $name) .Values.auth.apiKey.selectorLabels) | nindent 14 }}
+        credentials:
+          authorizationHeader:
+            prefix: {{ .Values.auth.apiKey.prefix }}
+      {{- end }}
+      {{- if $oidc.enabled }}
+      oidc:
+        jwt:
+          issuerUrl: {{ $oidc.issuerUrl }}
+      {{- end }}
+    {{- if and $oidc.enabled $oidc.audience }}
+    authorization:
+      audience:
+        # JWTs only: API-key identities have no "sub" claim.
+        when:
+          - predicate: has(auth.identity.sub)
+        patternMatching:
+          patterns:
+            - predicate: >-
+                type(auth.identity.aud) == string
+                ? auth.identity.aud == '{{ $oidc.audience }}'
+                : '{{ $oidc.audience }}' in auth.identity.aud
+    {{- end }}
+    # Expose a uniform caller identity to the RateLimitPolicy as auth.identity.userid / .planid.
+    # JWT callers have a "sub" claim; API-key callers are a Secret with annotations.
+    response:
+      success:
+        filters:
+          identity:
+            json:
+              properties:
+                userid:
+                  expression: >-
+                    has(auth.identity.sub)
+                    ? auth.identity.sub
+                    : auth.identity.metadata.annotations['secret.kuadrant.io/user-id']
+                planid:
+                  expression: >-
+                    has(auth.identity.sub)
+                    ? (has(auth.identity.{{ $oidc.planClaim }}) ? string(auth.identity.{{ $oidc.planClaim }}) : '{{ $default }}')
+                    : ('secret.kuadrant.io/plan-id' in auth.identity.metadata.annotations
+                       ? auth.identity.metadata.annotations['secret.kuadrant.io/plan-id']
+                       : '{{ $default }}')
+    {{- end }}
+{{- end }}
