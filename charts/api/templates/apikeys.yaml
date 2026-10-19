@@ -1,0 +1,35 @@
+{{- $name := include "api.name" . -}}
+{{- $key := .Values.auth.apiKey -}}
+{{- if and (eq .Values.auth.mode "protected") $key.enabled }}
+{{- range $c := $key.consumers }}
+{{- if not $c.user }}{{ fail "each auth.apiKey.consumers entry needs a user" }}{{ end }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: apikey-{{ $name }}-{{ $c.user }}
+  # Authorino reads keys from the Kuadrant namespace.
+  namespace: kuadrant-system
+spec:
+  refreshInterval: {{ $key.vault.refreshInterval }}
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ $key.vault.store }}
+  target:
+    name: apikey-{{ $name }}-{{ $c.user }}
+    creationPolicy: Owner
+    template:
+      metadata:
+        labels:
+          authorino.kuadrant.io/managed-by: authorino
+          {{- include "api.keyLabels" $ | nindent 10 }}
+        annotations:
+          secret.kuadrant.io/user-id: {{ $c.user | quote }}
+          secret.kuadrant.io/plan-id: {{ default $.Values.auth.defaultPlan $c.plan | quote }}
+  data:
+    - secretKey: api_key
+      remoteRef:
+        key: {{ $key.vault.keyPrefix }}/{{ $name }}/{{ $c.user }}
+        property: api_key
+{{- end }}
+{{- end }}

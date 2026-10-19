@@ -1,0 +1,23 @@
+name: vault
+server: https://vault.example.internal:8200
+# Vault Enterprise namespace, if you use one.
+vaultNamespace: ""
+# KV version 2 secrets engine mount.
+kvMount: secret
+
+# Vault Kubernetes auth. vault/setup.sh creates the matching mount and role.
+auth:
+  mountPath: ocp-rhcl
+  role: eso-rhcl
+
+# The External Secrets controller's ServiceAccount (release name "external-secrets").
+serviceAccount:
+  name: external-secrets
+  namespace: external-secrets
+
+# Trust the OpenShift cluster CA bundle (public CAs + your additionalTrustBundle) for Vault's TLS certificate.
+trustClusterCABundle: true
+
+# Only these namespaces may use the store. API-key Secrets live in kuadrant-system.
+allowedNamespaces:
+  - kuadrant-system

@@ -1,0 +1,6 @@
+# Values for charts/vault-store. Must match what vault/setup.sh configured in Vault.
+server: https://vault.example.internal:8200
+kvMount: secret
+auth:
+  mountPath: ocp-rhcl
+  role: eso-rhcl

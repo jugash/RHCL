@@ -21,7 +21,7 @@ spec:
         apiKey:
           selector:
             matchLabels:
-              {{- toYaml (default (dict "api" $name) .Values.auth.apiKey.selectorLabels) | nindent 14 }}
+              {{- include "api.keyLabels" . | nindent 14 }}
         credentials:
           authorizationHeader:
             prefix: {{ .Values.auth.apiKey.prefix }}

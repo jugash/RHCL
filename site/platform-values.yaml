@@ -1,0 +1,20 @@
+# Values for charts/rhcl-platform. Changes here are applied by Argo CD.
+mesh:
+  # Pin after the first sync: oc get istio default -o jsonpath='{.spec.version}'
+  version: ""
+  # Switch to STRICT once no app is reached through an OpenShift Route any more.
+  mtlsMode: PERMISSIVE
+
+gateway:
+  hostname: "*.api.example.internal"
+  # Pin the LoadBalancer IP so the DNS record stays valid.
+  serviceAnnotations: {}
+  #  metallb.io/loadBalancerIPs: 10.0.0.50
+  # Legacy hostnames moved off OpenShift Routes (see routes-to-api-values.py report).
+  extraListeners: []
+
+tls:
+  issuer:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: internal-ca

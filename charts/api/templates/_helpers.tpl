@@ -2,6 +2,11 @@
 {{- default .Release.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{/* Labels that select this API's key Secrets. */}}
+{{- define "api.keyLabels" -}}
+{{- toYaml (default (dict "api" (include "api.name" .)) .Values.auth.apiKey.selectorLabels) -}}
+{{- end -}}
+
 {{- define "api.routeRef" -}}
 group: gateway.networking.k8s.io
 kind: HTTPRoute

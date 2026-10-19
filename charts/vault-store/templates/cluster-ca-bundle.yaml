@@ -1,0 +1,11 @@
+{{- if .Values.trustClusterCABundle }}
+# OpenShift fills ca-bundle.crt with the cluster trust bundle. Argo applies with server-side apply,
+# so it owns only this label and never fights over the injected data.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-ca-bundle
+  namespace: {{ .Values.serviceAccount.namespace }}
+  labels:
+    config.openshift.io/inject-trusted-cabundle: "true"
+{{- end }}

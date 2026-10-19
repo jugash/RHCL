@@ -1,0 +1,3 @@
+# Values for charts/rhcl-operators. Changes here are applied by Argo CD.
+# Automatic is needed for the first install; once installed, switch to Manual and approve upgrades.
+installPlanApproval: Automatic

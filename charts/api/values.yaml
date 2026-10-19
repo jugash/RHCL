@@ -31,8 +31,18 @@ auth:
     # Header format: "Authorization: APIKEY <key>".
     prefix: APIKEY
     # Labels on the key Secrets in kuadrant-system. Empty = {api: <name>}.
-    # scripts/create-api-key.sh creates Secrets with these labels.
     selectorLabels: {}
+    # Callers of this API. Each key is read from Vault at <vault.keyPrefix>/<name>/<user> (field api_key)
+    # and synced to a Secret in kuadrant-system. Removing a consumer revokes the key.
+    # scripts/vault-create-api-key.sh writes the key to Vault.
+    consumers: []
+    #  - user: alice
+    #    plan: gold
+    vault:
+      store: vault
+      keyPrefix: rhcl/apikeys
+      # How quickly a key rotated in Vault reaches the gateway.
+      refreshInterval: 15m
 
   oidc:
     enabled: false
