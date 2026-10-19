@@ -7,7 +7,9 @@ metadata:
   name: servicemeshoperator3
   namespace: openshift-operators
   annotations:
+    # Never delete on uninstall/prune (Helm and Argo CD respectively).
     helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Delete=false
 spec:
   channel: {{ .Values.serviceMesh.channel }}
   name: servicemeshoperator3

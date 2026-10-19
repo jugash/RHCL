@@ -2,11 +2,8 @@
 
 Check the route and its policies:
   oc get httproute,authpolicy,ratelimitpolicy -n {{ .Release.Namespace }}
-
-The namespace needs the gateway access label (scripts/onboard-namespace.sh {{ .Release.Namespace }}),
-or the route will not attach.
 {{- if and (eq .Values.auth.mode "protected") .Values.auth.apiKey.enabled }}
+  oc get externalsecret -n kuadrant-system -l api={{ include "api.name" . }}
 
-Create an API key:
-  scripts/create-api-key.sh {{ include "api.name" . }} <user> [plan]
+Add a caller: scripts/vault-create-api-key.sh {{ include "api.name" . }} <user>, then list it under auth.apiKey.consumers.
 {{- end }}

@@ -14,7 +14,9 @@ metadata:
   name: rhcl-operator
   namespace: {{ .Release.Namespace }}
   annotations:
+    # Never delete on uninstall/prune (Helm and Argo CD respectively).
     helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Delete=false
 spec:
   channel: {{ .Values.connectivityLink.channel }}
   name: rhcl-operator

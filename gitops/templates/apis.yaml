@@ -38,7 +38,7 @@ spec:
         namespace: {{`'{{ .path.basename }}'`}}
       syncPolicy:
         {{- include "gitops.syncPolicy" dict | nindent 8 }}
-        # Replaces scripts/onboard-namespace.sh: sidecar injection plus permission to attach to the gateway.
+        # Sidecar injection plus permission to attach to the gateway.
         # Existing pods only get a sidecar after a restart.
         managedNamespaceMetadata:
           labels:

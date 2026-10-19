@@ -1,116 +1,140 @@
-# Red Hat Connectivity Link on OpenShift (on-prem)
+# Red Hat Connectivity Link on OpenShift (on-prem, GitOps)
 
-Helm charts and scripts that set up:
+This repo sets up the following, driven entirely from Git by OpenShift GitOps (Argo CD):
 
 - **OpenShift Service Mesh 3** in sidecar mode, with **one Istio control plane** for both the mesh and the API gateway.
   Because the gateway is in the mesh, traffic from the gateway to your apps is mutual TLS.
 - **Connectivity Link (Kuadrant)**: Authorino for API keys and OIDC/JWT, Limitador for rate limits, and TLSPolicy for cert-manager certificates.
 - A shared **Gateway API gateway** with safe defaults: every route is denied unless it has its own AuthPolicy, plus a default rate limit and an HTTP→HTTPS redirect.
+- **API keys from HashiCorp Vault**, synced by External Secrets Operator. Keys never live in Git.
 - A path to **move apps off OpenShift Routes/Ingress** and onto HTTPRoutes.
 
-Target: OpenShift 4.19+ on-prem, with MetalLB (or another LoadBalancer provider) and cert-manager already installed.
+Target: OpenShift 4.19+ on-prem, with MetalLB (or another LoadBalancer provider) and cert-manager already installed, a GitHub repo and a Vault server.
+
+## How it fits together
 
 ```
+bootstrap/bootstrap.sh  (run once by hand)
+  └─ OpenShift GitOps operator + RBAC + health checks
+     └─ rhcl-root Application  ──renders──  gitops/ (app-of-apps chart)
+          wave 0  rhcl-operators     charts/rhcl-operators   + site/operators-values.yaml
+          wave 0  external-secrets   upstream ESO chart 2.12.0
+          wave 1  rhcl-platform      charts/rhcl-platform    + site/platform-values.yaml
+          wave 1  vault-store        charts/vault-store      + site/vault-store-values.yaml
+          wave 2  rhcl-apis          ApplicationSet: one Application per apis/<namespace>/<api>.yaml
+```
+
+- **Wave order.** Each wave starts only when the previous one is healthy. The custom health checks in `bootstrap/argocd-health-checks.yaml` teach Argo when Subscriptions, Istio, Kuadrant, Gateways, policies and ExternalSecrets are actually ready.
+- **Day 2.** After bootstrap, every change is a commit:
+
+| You want to… | Change in Git |
+|---|---|
+| Change the domain, issuer, LB IP, Istio version, mTLS mode | `site/platform-values.yaml` |
+| Expose an API | add `apis/<namespace>/<api>.yaml` |
+| Change an API's auth or rate limits | edit its file in `apis/` |
+| Give a caller an API key | `scripts/vault-create-api-key.sh`, then add them under `consumers` |
+| Revoke a caller | remove them from `consumers` (or delete the key in Vault) |
+| Remove an API | delete its file |
+
+## Repo layout
+
+```
+bootstrap/          one-time setup: GitOps operator, RBAC, health checks, root Application
+gitops/             app-of-apps chart (Applications, sync waves, the apis/ ApplicationSet)
 charts/
   rhcl-operators/   OLM subscriptions: servicemeshoperator3, rhcl-operator
   rhcl-platform/    IstioCNI, Istio, mTLS mode, Kuadrant, Gateway, TLSPolicy, default policies
-  api/              one release per API: HTTPRoute + AuthPolicy + RateLimitPolicy (+ optional demo backend)
+  vault-store/      ClusterSecretStore for Vault (Kubernetes auth)
+  api/              one API: HTTPRoute + AuthPolicy + RateLimitPolicy + API-key ExternalSecrets
+site/               values for this cluster
+apis/               one file per API
+vault/setup.sh      one-time Vault configuration (run by a Vault admin)
 scripts/
-  onboard-namespace.sh       label a namespace for the mesh and the gateway
-  create-api-key.sh          create an API key for an API
-  routes-to-api-values.py    turn existing Routes/Ingresses into api-chart values files
+  vault-create-api-key.sh    generate an API key in Vault
+  routes-to-api-values.py    turn existing Routes/Ingresses into apis/ files
   verify.sh                  check each layer and report what is not ready
 ```
 
-The work is split into three charts because Helm cannot create a resource before its CRD exists, and the operators from the first chart install the CRDs that the second chart uses.
+## Setup
 
-## Values to change
+### 1. Fill in the site values and push to GitHub
 
-| Where | Value | Default |
-|---|---|---|
-| `rhcl-platform` | `gateway.hostname`: wildcard domain for APIs | `*.api.example.internal` |
-| `rhcl-platform` | `tls.issuer.name`: your cert-manager ClusterIssuer | `internal-ca` |
-| `rhcl-platform` | `gateway.serviceAnnotations`: pin the LB IP so DNS stays valid | none |
-| `api` | `auth.oidc.issuerUrl`: your IdP realm | `https://sso.example.internal/realms/api` |
-
-Put site values in your own file (e.g. `site-values.yaml`) instead of editing the charts:
-
-```yaml
-# site-values.yaml (for rhcl-platform)
-gateway:
-  hostname: "*.api.corp.example"
-  serviceAnnotations:
-    metallb.io/loadBalancerIPs: 10.20.30.40
-tls:
-  issuer:
-    name: corp-ca
-```
-
-## Install
-
-You need `cluster-admin`.
-
-### 1. Operators
+| File | Set |
+|---|---|
+| `site/platform-values.yaml` | `gateway.hostname`, `tls.issuer.name`, and the LB IP in `gateway.serviceAnnotations` |
+| `site/vault-store-values.yaml` | `server` (Vault URL) |
+| `apis/echo-api/echo-api.yaml` | `hostnames`: under your gateway domain |
 
 ```bash
-helm upgrade --install rhcl-operators charts/rhcl-operators -n kuadrant-system --create-namespace
-```
-
-Wait until both operators report `Succeeded`. This takes a few minutes, and the next chart fails if you go on too early:
-
-```bash
-oc get csv -n openshift-operators -l operators.coreos.com/servicemeshoperator3.openshift-operators -w
+git init -b main && git add . && git commit -m "Connectivity Link platform"
 ```
 
 ```bash
-oc get csv -n kuadrant-system -w
+gh repo create <org>/rhcl-gitops --private --source . --push
 ```
 
-### 2. Platform (mesh, Kuadrant, gateway)
+### 2. Configure Vault (once, by a Vault admin)
+
+Run this with `vault` logged in as an admin and `oc` logged in to the cluster:
 
 ```bash
-helm upgrade --install rhcl-platform charts/rhcl-platform -n kuadrant-system -f site-values.yaml
+OCP_API=https://api.ocp.example.internal:6443 vault/setup.sh
+```
+
+It creates:
+
+- a KV v2 mount (`secret`), if missing
+- a Kubernetes auth mount for this cluster (`ocp-rhcl`)
+- a read-only policy for `secret/rhcl/apikeys/*`
+- the role `eso-rhcl`, bound to the External Secrets service account
+
+If your API server uses a custom certificate from your internal CA, edit the script so it passes that CA instead of `kube-root-ca.crt`.
+
+Create the demo API's first key:
+
+```bash
+scripts/vault-create-api-key.sh echo-api alice
+```
+
+### 3. Bootstrap the cluster (the only `oc apply`)
+
+```bash
+REPO_URL=https://github.com/<org>/rhcl-gitops.git GITHUB_TOKEN=<read-only token> bootstrap/bootstrap.sh
+```
+
+- `GITHUB_TOKEN` is needed only for a private repo: a fine-grained token with read access to the repo's contents.
+- The script installs OpenShift GitOps, gives its controller cluster-admin, adds the health checks and creates the root Application.
+
+Watch the waves sync in the Argo CD UI, or with:
+
+```bash
+oc get applications -n openshift-gitops -w
 ```
 
 ```bash
 scripts/verify.sh
 ```
 
-`verify.sh` checks operators → Istio → GatewayClass → Kuadrant → Gateway → policies, and prints the gateway's address.
+### 4. DNS (one record)
 
-Then pin the Istio version, so that a later operator upgrade doesn't silently upgrade the mesh:
-
-```bash
-oc get istio default -o jsonpath='{.spec.version}'
-```
-
-Set that value as `mesh.version` in `site-values.yaml`.
-
-### 3. DNS (on-prem)
-
-Kuadrant's DNSPolicy can't write to BIND, Infoblox or AD DNS, so DNS is a one-time manual step. In your DNS, create:
+Kuadrant's DNSPolicy can't write to BIND, Infoblox or AD DNS. In your DNS, create:
 
 ```
 *.api.example.internal.   A   <gateway address from verify.sh>
 ```
 
-Pin the address with `gateway.serviceAnnotations` (e.g. `metallb.io/loadBalancerIPs`) so this record stays valid.
+To automate DNS too, ExternalDNS can manage BIND/AD (RFC2136) or Infoblox records straight from Gateways and HTTPRoutes. It isn't a Red Hat-supported component.
 
-### 4. Try it with the demo API
+### 5. Pin versions
 
-```bash
-scripts/onboard-namespace.sh echo-api
-```
+After the first sync, commit two changes to `site/` so that operator upgrades don't silently upgrade the mesh:
 
-```bash
-helm upgrade --install echo-api charts/api -n echo-api -f charts/api/values-demo.yaml
-```
+- Set `mesh.version` in `site/platform-values.yaml` to the output of `oc get istio default -o jsonpath='{.spec.version}'`.
+- Set `installPlanApproval: Manual` in `site/operators-values.yaml`.
 
-```bash
-KEY=$(scripts/create-api-key.sh echo-api alice gold)
-```
+### 6. Try the demo API
 
-Expected results:
+`KEY` is the output of `vault-create-api-key.sh` in step 2.
 
 ```bash
 curl -i https://echo.api.example.internal/
@@ -124,13 +148,16 @@ curl -i -H "Authorization: APIKEY $KEY" https://echo.api.example.internal/
 
 returns `200`.
 
-To see a rate limit, create a `free`-plan key (60 requests a minute):
+To see a rate limit, add a caller on the `free` plan (60 requests a minute) and call it 70 times:
+
+1. Create bob's key:
 
 ```bash
-FREE=$(scripts/create-api-key.sh echo-api bob free)
+FREE=$(scripts/vault-create-api-key.sh echo-api bob)
 ```
 
-Call it 70 times. The last calls return `429`:
+2. Add `- user: bob` (plan `free`) under `consumers` in `apis/echo-api/echo-api.yaml`, commit, and wait for Argo to sync.
+3. Run the loop. The last calls return `429`:
 
 ```bash
 for i in $(seq 1 70); do curl -s -o /dev/null -w '%{http_code} ' -H "Authorization: APIKEY $FREE" https://echo.api.example.internal/; done
@@ -138,17 +165,24 @@ for i in $(seq 1 70); do curl -s -o /dev/null -w '%{http_code} ' -H "Authorizati
 
 ## Exposing an API
 
-One `api` release per API, in the app's namespace:
+Add `apis/<namespace>/<api>.yaml`:
+
+- The directory name is the namespace. Argo creates it if needed and labels it for sidecar injection and gateway access.
+- The file name is the API name.
 
 ```yaml
-# orders-values.yaml
+# apis/shop/orders.yaml
 hostnames: [orders.api.example.internal]
 rules:
   - matches: [{path: {type: PathPrefix, value: /}}]
     backendRefs: [{name: orders, port: 8080}]
 auth:
   mode: protected        # protected | public | none
-  apiKey: {enabled: true}
+  apiKey:
+    enabled: true
+    consumers:
+      - {user: billing-service, plan: gold}
+      - {user: partner-acme}             # gets auth.defaultPlan (free)
   oidc:
     enabled: true
     issuerUrl: https://sso.example.internal/realms/api
@@ -161,23 +195,24 @@ rateLimit:
   total: {limit: 5000, window: 1m}
 ```
 
-```bash
-helm upgrade --install orders charts/api -n shop -f orders-values.yaml
-```
-
 How the pieces fit:
 
 - **Auth.** Callers send either `Authorization: APIKEY <key>` or `Authorization: Bearer <jwt>`. Either one is enough.
-- **Per-user limits.** The AuthPolicy publishes `auth.identity.userid` and `auth.identity.planid`. For an API key these come from the Secret annotations `secret.kuadrant.io/user-id` and `secret.kuadrant.io/plan-id`. For a JWT they come from `sub` and the `plan` claim (`auth.oidc.planClaim`). The RateLimitPolicy counts per `userid`, with a limit for each plan.
+- **Where keys live.** Each consumer's key is in Vault at `secret/rhcl/apikeys/<api>/<user>` (field `api_key`). An ExternalSecret syncs it into `kuadrant-system`, where Authorino reads it.
+- **Rotating a key.** Re-run `vault-create-api-key.sh`. The new key reaches the gateway within `refreshInterval` (15 minutes by default).
+- **Per-user limits.** The RateLimitPolicy counts per caller, with a limit for each plan:
+  - for an API key, the caller is its `user` and the plan is its `plan`;
+  - for a JWT, the caller is `sub` and the plan comes from the `plan` claim (`auth.oidc.planClaim`).
 - **Unlisted plans.** A caller whose plan is not in `rateLimit.perUser.plans` gets only the route-wide `total` limit.
-- **Revoking a key.** `oc delete secret apikey-<api>-<user> -n kuadrant-system`
+- **Existing pods.** In a namespace that already existed, existing pods get the sidecar only after a restart: `oc rollout restart deployment -n <namespace>`.
 
 ### Trusting an internal CA for OIDC
 
-Authorino fetches your IdP's discovery document and keys over HTTPS. If the IdP's certificate comes from an internal CA, Authorino must trust that CA.
+Authorino fetches your IdP's discovery document and keys over HTTPS. If the IdP's certificate comes from an internal CA, Authorino must trust it.
 
-1. Make sure the CA is in the cluster trust bundle (`oc get proxy cluster -o jsonpath='{.spec.trustedCA.name}'`).
-2. Create a ConfigMap that OpenShift fills with that bundle:
+To do that, add the CA to the cluster trust bundle (`oc get proxy cluster -o jsonpath='{.spec.trustedCA.name}'`) and mount the bundle into Authorino:
+
+1. Create a ConfigMap that OpenShift fills with the bundle:
 
 ```bash
 oc create configmap internal-ca-bundle -n kuadrant-system
@@ -187,42 +222,42 @@ oc create configmap internal-ca-bundle -n kuadrant-system
 oc label configmap internal-ca-bundle -n kuadrant-system config.openshift.io/inject-trusted-cabundle=true
 ```
 
-3. Mount it into Authorino:
+2. Mount it into Authorino:
 
 ```bash
 oc patch authorino authorino -n kuadrant-system --type merge -p '{"spec":{"volumes":{"items":[{"name":"internal-ca","mountPath":"/etc/ssl/certs","configMaps":["internal-ca-bundle"],"items":[{"key":"ca-bundle.crt","path":"ca-bundle.crt"}]}]}}}'
 ```
 
-After an operator upgrade, check that the patch is still in place: the Kuadrant operator manages this Authorino CR.
+This is still a manual step, because the Kuadrant operator owns the Authorino CR. If you only use API keys, you don't need it.
 
 ## Migrating off Routes/Ingress
 
 The **default IngressController (router) stays**. It serves the web console, OAuth, monitoring and other `openshift-*` routes, and must not be removed. What you migrate is your applications' Routes and Ingresses. Once that is done, the router serves only the platform.
 
-1. Export what you have and generate a plan:
+1. Generate API files from what you have:
 
 ```bash
 oc get routes,ingresses,services -A -o json > cluster.json
 ```
 
 ```bash
-scripts/routes-to-api-values.py cluster.json --out migration --gateway-hostname '*.api.example.internal'
+scripts/routes-to-api-values.py cluster.json --gateway-hostname '*.api.example.internal'
 ```
 
+   - The script writes `apis/<namespace>/<name>.yaml` and `migration-report.md`. It never overwrites an existing file.
    - Add `--rehost apps.ocp.example.internal=api.example.internal` to move apps to the new domain while you're at it.
-   - Without it, hostnames stay the same, and the plan lists the extra gateway listeners they need.
-
-2. Follow `migration/REPORT.md` step by step:
-   1. **Onboard namespaces.** This adds the sidecar and gateway labels and restarts the pods. With `mtlsMode: PERMISSIVE`, the old Routes keep working.
-   2. **Add listeners.** If the report lists `extraListeners`, add them to `site-values.yaml` and upgrade `rhcl-platform`.
-   3. **Install the generated values files.** Each starts as `auth.mode: public` so behaviour doesn't change. Read the `WARNING` lines at the top of each file (IP allow-lists, custom certificates, reencrypt, etc.).
+   - Without it, hostnames stay the same, and the report lists the extra gateway listeners they need.
+2. Follow `migration-report.md`:
+   1. **Add listeners.** If the report lists any, add them to `site/platform-values.yaml`.
+   2. **Commit the API files.** Each starts as `auth.mode: public` so behaviour doesn't change. Read the `WARNING` lines at the top of each file.
+   3. **Restart the workloads** so they get sidecars. With `mtlsMode: PERMISSIVE`, the old Routes keep working.
    4. **Test** through the gateway with `curl --resolve` before touching DNS.
    5. **Cut over DNS.**
       - New domain: nothing to do, the wildcard already points at the gateway.
-      - Same hostname: add a specific A record for that hostname pointing at the gateway. It overrides the `*.apps` wildcard that points at the router.
-   6. **Delete the old Route or Ingress.**
-3. Tighten each API: switch `auth.mode` to `protected` once its callers have keys or tokens.
-4. When no app traffic uses the router any more, set `mesh.mtlsMode: STRICT` and upgrade `rhcl-platform`.
+      - Same hostname: add a specific A record for that hostname pointing at the gateway. It overrides the `*.apps` wildcard.
+   6. **Delete the old Route or Ingress** (in Git, if that's where it lives).
+3. Tighten each API: switch `auth.mode` to `protected` and add `consumers`.
+4. When no app traffic uses the router any more, set `mesh.mtlsMode: STRICT` in `site/platform-values.yaml`.
 
 Not converted automatically:
 
@@ -233,6 +268,7 @@ Not converted automatically:
 ## Notes
 
 - **Don't create** a GatewayClass with `controllerName: openshift.io/gateway-controller/v1`. That makes OpenShift install a second, gateway-only Istio that is not part of this mesh.
+- **Argo CD permissions.** The `openshift-gitops` instance gets cluster-admin because it installs operators and cluster-scoped resources. Give application teams their own namespace-scoped Argo CD instance, or limit them with AppProjects.
 - **NetworkPolicies.** In namespaces that have them, allow ingress from `api-gateway`. The Istio sidecars also need to reach `istio-system`.
-- **Upgrades.** For production, set `installPlanApproval: Manual` in `rhcl-operators`, and pin `mesh.version`.
-- **Uninstall.** `helm uninstall` keeps the Subscriptions and Namespaces (`helm.sh/resource-policy: keep`), so a mistaken uninstall doesn't remove the operators or delete data.
+- **Pruning safety.** Subscriptions and namespaces carry `argocd.argoproj.io/sync-options: Delete=false`, so removing something from Git never uninstalls the operators or deletes a namespace.
+- **Without Argo CD.** The charts in `charts/` still work with plain `helm upgrade --install` in wave order. Pass `site/*.yaml` and `apis/*/*.yaml` as values files, and label app namespaces with `istio-injection=enabled` and `api-gateway-access=true`.

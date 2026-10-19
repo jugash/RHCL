@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Turn OpenShift Routes and Kubernetes Ingresses into values files for charts/api.
+"""Turn OpenShift Routes and Kubernetes Ingresses into API files for the GitOps repo.
 
     oc get routes,ingresses,services -A -o json > cluster.json
-    scripts/routes-to-api-values.py cluster.json --out migration \
+    scripts/routes-to-api-values.py cluster.json \
         --gateway-hostname '*.api.example.internal' \
         --rehost apps.ocp.example.internal=api.example.internal
 
-Writes migration/<namespace>/<release>.values.yaml (one per Route, one per Ingress host)
-and migration/REPORT.md with the namespaces to onboard, the helm commands, the warnings
-and the old objects to delete after cutover. Nothing is applied to the cluster.
+Writes apis/<namespace>/<release>.yaml (one per Route, one per Ingress host), which Argo CD
+deploys with charts/api once committed, and migration-report.md with the listeners to add,
+the warnings, test commands and the old objects to delete after cutover.
+Nothing is applied to the cluster.
 
 Every generated API starts with auth.mode=public, so it keeps working the way the
 Route did; switch each to protected once its callers have credentials.
@@ -187,7 +188,8 @@ def convert_ingress(ing, services, warnings):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("input", help="output of: oc get routes,ingresses,services -A -o json")
-    ap.add_argument("--out", default="migration")
+    ap.add_argument("--out", default="apis", help="the repo's apis/ directory")
+    ap.add_argument("--report", default="migration-report.md")
     ap.add_argument("--gateway-hostname", default="*.api.example.internal",
                     help="hostname of the gateway's main HTTPS listener")
     ap.add_argument("--rehost", action="append", default=[], metavar="OLD=NEW",
@@ -240,7 +242,10 @@ def main():
                 "rules": rules,
                 "auth": {"mode": "public"},
             })
-            path = out / ns / f"{release}.values.yaml"
+            path = out / ns / f"{release}.yaml"
+            if path.exists():
+                report["skipped"].append(f"{kind} {ns}/{name}: {path} already exists, left unchanged")
+                continue
             path.parent.mkdir(parents=True, exist_ok=True)
             header = [f"# Generated from {kind} {ns}/{name} by routes-to-api-values.py",
                       "# auth.mode=public keeps today's behaviour. Switch to protected when callers have credentials.",
@@ -249,7 +254,7 @@ def main():
             path.write_text("\n".join(header) + "\n" + to_yaml(values) + "\n")
 
             namespaces.add(ns)
-            report["install"].append(f"helm upgrade --install {release} charts/api -n {ns} -f {path}")
+            report["install"].append(str(path))
             report["test"].append(f"curl -sS --resolve {host}:443:$GW_IP https://{host}/ -o /dev/null -w '%{{http_code}} {host}\\n'")
             delete = f"oc delete {kind.lower()} {name} -n {ns}"
             if delete not in report["delete"]:
@@ -257,32 +262,33 @@ def main():
             report["warnings"] += [f"{ns}/{release}: {w}" for w in host_warnings]
 
     lines = ["# Route/Ingress migration plan", ""]
-    lines += ["## 1. Onboard namespaces", "", "```bash"]
-    lines += [f"scripts/onboard-namespace.sh {ns} --restart" for ns in sorted(namespaces)] + ["```", ""]
     if extra_listeners:
-        lines += ["## 1b. Hostnames that need their own gateway listener",
+        lines += ["## 1. Add gateway listeners",
                   "",
-                  "Add these to `gateway.extraListeners` in the rhcl-platform values (the generated",
-                  "values files already attach to them by name), then `helm upgrade` rhcl-platform:", "", "```yaml"]
+                  "These hostnames need their own listener. Add them to `gateway.extraListeners` in",
+                  "`site/platform-values.yaml` (the generated files already attach to them by name):", "", "```yaml"]
         for h in sorted(extra_listeners):
             lines += [f"- name: {h}", f"  hostname: {h}"]
         lines += ["```", ""]
-    lines += ["## 2. Install the HTTPRoutes (old Routes keep serving traffic)", "", "```bash"]
-    lines += report["install"] + ["```", ""]
-    lines += ["## 3. Test through the gateway before changing DNS", "",
+    lines += ["## 2. Review and commit the generated API files", "",
+              "Read the WARNING lines at the top of each file. After Argo CD syncs, the old Routes keep serving traffic.", ""]
+    lines += [f"- `{f}`" for f in report["install"]] + [""]
+    lines += ["## 3. Restart workloads so they get the Istio sidecar", "", "```bash"]
+    lines += [f"oc rollout restart deployment,statefulset -n {ns}" for ns in sorted(namespaces)] + ["```", ""]
+    lines += ["## 4. Test through the gateway before changing DNS", "",
               "```bash", "GW_IP=$(oc get gateway api-gateway -n api-gateway -o jsonpath='{.status.addresses[0].value}')"]
     lines += report["test"] + ["```", ""]
-    lines += ["## 4. Switch DNS to the gateway, then delete the old objects", "", "```bash"]
+    lines += ["## 5. Switch DNS to the gateway, then delete the old objects", "",
+              "If the Routes/Ingresses are themselves managed in Git, remove them there instead.", "", "```bash"]
     lines += report["delete"] + ["```", ""]
     if report["warnings"]:
         lines += ["## Warnings", ""] + [f"- {w}" for w in report["warnings"]] + [""]
     if report["skipped"]:
         lines += ["## Not converted", ""] + [f"- {s}" for s in report["skipped"]] + [""]
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "REPORT.md").write_text("\n".join(lines))
+    Path(args.report).write_text("\n".join(lines))
 
-    print(f"{len(report['install'])} values files, {len(report['skipped'])} skipped, "
-          f"{len(report['warnings'])} warnings -> {out}/REPORT.md")
+    print(f"{len(report['install'])} API files written to {out}/, {len(report['skipped'])} skipped, "
+          f"{len(report['warnings'])} warnings -> {args.report}")
 
 
 if __name__ == "__main__":

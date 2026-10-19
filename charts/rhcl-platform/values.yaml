@@ -20,7 +20,7 @@ gateway:
   #   - name: legacy-shop
   #     hostname: shop.apps.ocp.example.internal
   extraListeners: []
-  # Namespaces need this label before their HTTPRoutes can attach (scripts/onboard-namespace.sh adds it).
+  # Namespaces need this label before their HTTPRoutes can attach (the rhcl-apis ApplicationSet adds it).
   accessLabel:
     api-gateway-access: "true"
   # Passed to the generated LoadBalancer Service. Pin the IP so the DNS record stays valid, e.g.:

@@ -5,5 +5,7 @@ kind: Namespace
 metadata:
   name: {{ $ns }}
   annotations:
+    # Never delete on uninstall/prune (Helm and Argo CD respectively).
     helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Delete=false
 {{- end }}
