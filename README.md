@@ -162,6 +162,7 @@ EXISTING_URLS="https://myapp.apps.ocp.example.internal/" scripts/test-examples.s
 What the script checks:
 
 - **Gateway:** certificate, HTTP→HTTPS redirect, every expectation in the table, per-user isolation, and that gateway→app traffic is mutual TLS.
+- **Network policies:** each example namespace denies everything except the gateway's pods and the sidecar's istiod/DNS traffic, so the tests above pass with everything else locked down.
 - **No impact:** no namespace outside the repo got the mesh or gateway labels, no HTTPRoute exists outside the repo's namespaces, and the default IngressController is still available.
 
 Pass `CACERT=<your internal CA file>` to verify the certificate instead of skipping verification.

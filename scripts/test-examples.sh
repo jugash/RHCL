@@ -121,6 +121,20 @@ for ns in $(ls -d examples/*/ | xargs -n1 basename); do
 done
 
 echo
+echo "Network policies"
+# The API tests above already went through these policies; here we check they are all in place,
+# so a pass means "reachable from the gateway with everything else denied".
+for ns in $(ls -d examples/*/ | xargs -n1 basename); do
+  have=$(oc get networkpolicy -n "$ns" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null)
+  missing=""
+  for np in default-deny allow-from-api-gateway allow-mesh-egress; do
+    [[ " $have " == *" $np "* ]] || missing+=" $np"
+  done
+  if [[ -z "$missing" ]]; then ok "$ns: default-deny with gateway and mesh exceptions"
+  else ko "$ns: missing NetworkPolicies:$missing"; fi
+done
+
+echo
 echo "No impact on the existing setup"
 expected=$( (ls -d examples/*/ apis/*/ 2>/dev/null) | xargs -n1 basename | sort -u)
 for label in istio-injection=enabled api-gateway-access=true; do

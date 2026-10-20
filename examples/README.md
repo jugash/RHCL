@@ -9,6 +9,7 @@ Files are numbered so `oc apply -f <folder>` creates the namespace first:
 | `30-authpolicy.yaml` | Kuadrant AuthPolicy (who may call) |
 | `40-ratelimitpolicy.yaml` | Kuadrant RateLimitPolicy (how often) |
 | `50-externalsecrets.yaml` | API keys synced from Vault into `kuadrant-system` |
+| `60-networkpolicy.yaml` | Default deny, plus exceptions for the gateway's pods (app port) and the sidecar (istiod, DNS) |
 
 | Folder | Shows | Expect |
 |---|---|---|
@@ -27,6 +28,24 @@ uses another domain. They must fall under `gateway.hostname` in `site/platform-v
 ```bash
 oc apply -f examples/rhcl-ex-public/
 ```
+
+**Network policies**
+
+Each example namespace denies all traffic except:
+- from the gateway's pods (label `gateway.networking.k8s.io/gateway-name: api-gateway`) to the app's container port, `3000`;
+- from the sidecar to istiod (`15012`) and to DNS (`5353`).
+
+A passing `scripts/test-examples.sh` therefore shows the gateway works with everything else locked down.
+
+To see the deny side, call the app directly from a pod outside the gateway. The request should time out:
+
+```bash
+oc run np-probe -n default --rm -i --restart=Never --image=registry.access.redhat.com/ubi9/ubi-minimal -- curl -sS -m 5 http://hello.rhcl-ex-public.svc/
+```
+
+Copy `60-networkpolicy.yaml` into a real app's namespace with its own `app` label and container port.
+If the app still has an OpenShift Route, also allow the router until the Route is deleted. That rule
+is a `namespaceSelector` on the label `policy-group.network.openshift.io/ingress: ""`.
 
 **Testing them**
 

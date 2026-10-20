@@ -1,0 +1,69 @@
+# Locks the namespace down, then opens only what the API needs. Shows that the gateway still
+# reaches the app when everything else is denied (scripts/test-examples.sh checks it).
+# NetworkPolicy ports are pod ports: 3000 is the echo container's port, not the Service's 80.
+
+# 1. Deny all traffic in and out of every pod in the namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: rhcl-ex-public
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# 2. Let only the gateway's pods (not the whole api-gateway namespace) reach the app.
+# The sidecar receives this traffic as mutual TLS on the same port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-api-gateway
+  namespace: rhcl-ex-public
+spec:
+  podSelector:
+    matchLabels:
+      app: hello
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: api-gateway
+          podSelector:
+            matchLabels:
+              gateway.networking.k8s.io/gateway-name: api-gateway
+      ports:
+        - port: 3000
+          protocol: TCP
+---
+# 3. Let the Istio sidecar fetch its config and certificates from istiod, and resolve names.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-mesh-egress
+  namespace: rhcl-ex-public
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+      ports:
+        - port: 15012
+          protocol: TCP
+    # OpenShift DNS pods listen on 5353 (the dns-default Service exposes 53).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-dns
+      ports:
+        - port: 5353
+          protocol: UDP
+        - port: 5353
+          protocol: TCP
