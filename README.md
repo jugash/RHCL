@@ -48,7 +48,7 @@ charts/
   api/              one API: HTTPRoute + AuthPolicy + RateLimitPolicy + API-key ExternalSecrets
 site/               values for this cluster
 apis/               one file per API
-examples/           test APIs in their own rhcl-ex-* namespaces (examples.enabled in gitops/values.yaml)
+examples/           test APIs as plain manifests, each in its own rhcl-ex-* namespace
 vault/setup.sh      one-time Vault configuration (run by a Vault admin)
 scripts/
   vault-create-api-key.sh    generate an API key in Vault
@@ -65,7 +65,7 @@ scripts/
 |---|---|
 | `site/platform-values.yaml` | `gateway.hostname`, `tls.issuer.name`, and the LB IP in `gateway.serviceAnnotations` |
 | `site/vault-store-values.yaml` | `server` (Vault URL) |
-| `gitops/values.yaml` | `examples.domain`: must be under `gateway.hostname` |
+| `examples/*/20-httproute.yaml` | hostnames, if your gateway domain isn't `api.example.internal` |
 
 ```bash
 git init -b main && git add . && git commit -m "Connectivity Link platform"
@@ -140,7 +140,7 @@ After the first sync, commit two changes to `site/` so that operator upgrades do
 
 ### 6. Test with the examples
 
-`examples/` deploys three small test APIs. Nothing in it touches your current setup:
+`examples/` holds three small test APIs as plain Kubernetes manifests (Namespace, Deployment, Service, HTTPRoute, AuthPolicy, RateLimitPolicy, ExternalSecret). Read them to see how each feature is wired; [examples/README.md](examples/README.md) lists the files. Nothing in them touches your current setup:
 
 - **Own namespaces.** Each example runs in a new `rhcl-ex-*` namespace. Only those namespaces get the sidecar and gateway labels.
 - **Own address.** The gateway has its own LoadBalancer IP and its own domain. The OpenShift router, its `*.apps` wildcard and your Routes/Ingresses stay as they are.

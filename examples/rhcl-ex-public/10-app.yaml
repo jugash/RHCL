@@ -1,0 +1,38 @@
+# Echo backend: replies with the request it received (headers included).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello
+  namespace: rhcl-ex-public
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hello
+  template:
+    metadata:
+      labels:
+        app: hello
+    spec:
+      containers:
+        - name: echo
+          image: quay.io/kuadrant/authorino-examples:talker-api
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello
+  namespace: rhcl-ex-public
+spec:
+  selector:
+    app: hello
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000

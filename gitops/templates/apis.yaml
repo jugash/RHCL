@@ -6,7 +6,37 @@
 {{- end }}
 {{- if .Values.examples.enabled }}
 ---
-# Wave 2: the test APIs in examples/. Each lives in its own new rhcl-ex-* namespace,
-# so existing namespaces, Routes and Ingresses are never touched.
-{{ include "gitops.apiAppSet" (dict "root" . "name" "rhcl-examples" "dir" "examples" "appPrefix" "example" "domain" .Values.examples.domain) }}
+# Wave 2: the test APIs. Each examples/<namespace>/ folder holds plain Kubernetes manifests
+# (Namespace included) and becomes one Application. Existing namespaces, Routes and Ingresses
+# are never touched.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: rhcl-examples
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    {{- include "gitops.wave" 2 | nindent 4 }}
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: {{ .Values.repoURL }}
+        revision: {{ .Values.revision }}
+        directories:
+          - path: examples/*
+  template:
+    metadata:
+      name: {{`'example-{{ .path.basename }}'`}}
+    spec:
+      project: rhcl
+      source:
+        repoURL: {{ .Values.repoURL }}
+        targetRevision: {{ .Values.revision }}
+        path: {{`'{{ .path.path }}'`}}
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: {{`'{{ .path.basename }}'`}}
+      syncPolicy:
+        {{- include "gitops.syncPolicy" dict | nindent 8 }}
 {{- end }}

@@ -1,0 +1,34 @@
+# Each caller gets its own counter (auth.identity.userid), sized by plan:
+#   free: 3 requests / 10s     gold: 10 requests / 10s
+# plus a cap of 50 / 10s for the whole route.
+apiVersion: kuadrant.io/v1
+kind: RateLimitPolicy
+metadata:
+  name: echo
+  namespace: rhcl-ex-apikey
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: echo
+  limits:
+    plan-free:
+      rates:
+        - limit: 3
+          window: 10s
+      counters:
+        - expression: auth.identity.userid
+      when:
+        - predicate: auth.identity.planid == 'free'
+    plan-gold:
+      rates:
+        - limit: 10
+          window: 10s
+      counters:
+        - expression: auth.identity.userid
+      when:
+        - predicate: auth.identity.planid == 'gold'
+    total:
+      rates:
+        - limit: 50
+          window: 10s

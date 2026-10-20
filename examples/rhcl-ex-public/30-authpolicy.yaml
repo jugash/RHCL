@@ -1,0 +1,15 @@
+# Anonymous access. This route-level policy replaces the gateway's deny-all default.
+apiVersion: kuadrant.io/v1
+kind: AuthPolicy
+metadata:
+  name: hello
+  namespace: rhcl-ex-public
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: hello
+  rules:
+    authentication:
+      public:
+        anonymous: {}

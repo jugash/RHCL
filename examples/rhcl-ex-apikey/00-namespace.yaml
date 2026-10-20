@@ -1,0 +1,9 @@
+# New namespace for this example only. The labels add the Istio sidecar to its pods
+# and allow its HTTPRoute to attach to the shared gateway.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rhcl-ex-apikey
+  labels:
+    istio-injection: enabled
+    api-gateway-access: "true"

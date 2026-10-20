@@ -26,8 +26,7 @@ argocd.argoproj.io/sync-wave: {{ . | quote }}
 
 {{/*
 ApplicationSet that turns <dir>/<namespace>/<name>.yaml files into charts/api releases.
-Pass a dict: root (the chart context), name, dir, appPrefix, and optionally domain
-(sets hostnames[0] to <name>.<domain> so the files don't need their own hostnames).
+Pass a dict: root (the chart context), name, dir and appPrefix.
 */}}
 {{- define "gitops.apiAppSet" -}}
 {{- $v := .root.Values -}}
@@ -60,11 +59,6 @@ spec:
           releaseName: {{`'{{ trimSuffix ".yaml" .path.filename }}'`}}
           valueFiles:
             - {{`'../../{{ .path.path }}/{{ .path.filename }}'`}}
-          {{- with .domain }}
-          parameters:
-            - name: hostnames[0]
-              value: '{{`{{ trimSuffix ".yaml" .path.filename }}`}}.{{ . }}'
-          {{- end }}
       destination:
         server: https://kubernetes.default.svc
         namespace: {{`'{{ .path.basename }}'`}}

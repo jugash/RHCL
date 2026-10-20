@@ -8,12 +8,10 @@
 #   EXISTING_URLS  space-separated URLs of your current Routes/Ingresses, checked to still respond
 #   CACERT         CA file to verify the gateway certificate (default: skip verification, -k)
 #   TOKEN          an OIDC access token, to test Bearer auth on echo (needs oidc.enabled in the example)
-#   DOMAIN         examples domain (default: examples.domain from gitops/values.yaml)
 #   GW_NS, GW_NAME gateway namespace and name (default: api-gateway / api-gateway)
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-domain=${DOMAIN:-$(awk '/^examples:/{f=1} f && /^  domain:/{print $2; exit}' gitops/values.yaml)}
 gw_ns=${GW_NS:-api-gateway}
 gw=${GW_NAME:-api-gateway}
 tls=(-k)
@@ -43,9 +41,17 @@ burst() {
 # Let all 10s rate-limit windows expire before the next limit test.
 reset_limits() { sleep 11; }
 
-hello=hello.$domain echo_host=echo.$domain locked=locked.$domain
+# Hostnames come from the deployed HTTPRoutes, so editing them in examples/ is enough.
+host_of() { oc get httproute "$1" -n "$2" -o jsonpath='{.spec.hostnames[0]}' 2>/dev/null; }
+hello=$(host_of hello rhcl-ex-public)
+echo_host=$(host_of echo rhcl-ex-apikey)
+locked=$(host_of locked rhcl-ex-locked)
+if [[ -z "$hello" || -z "$echo_host" || -z "$locked" ]]; then
+  echo "Example HTTPRoutes not found. Check: oc get applications -n openshift-gitops | grep example-"
+  exit 1
+fi
 
-echo "Gateway $gw_ns/$gw, examples domain $domain"
+echo "Gateway $gw_ns/$gw"
 ip=$(oc get gateway "$gw" -n "$gw_ns" -o jsonpath='{.status.addresses[0].value}' 2>/dev/null)
 [[ -n "$ip" ]] || { echo "  The gateway has no address yet. Run scripts/verify.sh first."; exit 1; }
 echo "  address: $ip"

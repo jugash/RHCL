@@ -1,0 +1,47 @@
+# Callers must send "Authorization: APIKEY <key>". Valid keys are the Secrets in kuadrant-system
+# labelled api=echo (see externalsecrets.yaml).
+apiVersion: kuadrant.io/v1
+kind: AuthPolicy
+metadata:
+  name: echo
+  namespace: rhcl-ex-apikey
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: echo
+  rules:
+    authentication:
+      api-key:
+        apiKey:
+          selector:
+            matchLabels:
+              api: echo
+        credentials:
+          authorizationHeader:
+            prefix: APIKEY
+      # To also accept OIDC tokens ("Authorization: Bearer <jwt>"), uncomment and set your realm.
+      # Either method is then enough.
+      # oidc:
+      #   jwt:
+      #     issuerUrl: https://sso.example.internal/realms/api
+    # Give the RateLimitPolicy a caller id and plan as auth.identity.userid / auth.identity.planid.
+    # API-key callers: from the Secret's annotations. JWT callers: from the "sub" and "plan" claims.
+    response:
+      success:
+        filters:
+          identity:
+            json:
+              properties:
+                userid:
+                  expression: >-
+                    has(auth.identity.sub)
+                    ? auth.identity.sub
+                    : auth.identity.metadata.annotations['secret.kuadrant.io/user-id']
+                planid:
+                  expression: >-
+                    has(auth.identity.sub)
+                    ? (has(auth.identity.plan) ? string(auth.identity.plan) : 'free')
+                    : ('secret.kuadrant.io/plan-id' in auth.identity.metadata.annotations
+                       ? auth.identity.metadata.annotations['secret.kuadrant.io/plan-id']
+                       : 'free')

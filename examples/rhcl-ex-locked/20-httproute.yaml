@@ -1,0 +1,25 @@
+# No AuthPolicy here on purpose: the gateway's deny-all default applies, so requests get 403.
+# Attaches to the HTTPS listener of the shared gateway. The hostname must fall under the
+# listener's hostname (gateway.hostname in site/platform-values.yaml).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: locked
+  namespace: rhcl-ex-locked
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: api-gateway
+      namespace: api-gateway
+      sectionName: https
+  hostnames:
+    - locked.api.example.internal
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: locked
+          port: 80

@@ -1,12 +1,33 @@
-Test APIs, one per `examples/<namespace>/<name>.yaml`, deployed by the `rhcl-examples` ApplicationSet.
+Test APIs as plain Kubernetes manifests. Each `examples/<namespace>/` folder is self-contained.
+Files are numbered so `oc apply -f <folder>` creates the namespace first:
 
-- Each runs in its own new `rhcl-ex-*` namespace with a small echo backend, so nothing existing is touched.
-- Each is served at `<name>.<examples.domain>` (see `gitops/values.yaml`). No DNS record is needed,
-  because `scripts/test-examples.sh` talks to the gateway IP directly.
-- Remove them all by setting `examples.enabled: false` in `gitops/values.yaml`.
-
-| File | Shows |
+| File | What it is |
 |---|---|
-| `rhcl-ex-public/hello.yaml` | Anonymous access, route-wide rate limit (5 requests / 10s) |
-| `rhcl-ex-apikey/echo.yaml` | API keys from Vault, per-user limits by plan (free 3 / 10s, gold 10 / 10s) |
-| `rhcl-ex-locked/locked.yaml` | A route without an AuthPolicy is denied by the gateway default |
+| `00-namespace.yaml` | A new namespace, labelled for the Istio sidecar and for attaching to the gateway |
+| `10-app.yaml` | Echo backend (Deployment + Service) that replies with the request it received |
+| `20-httproute.yaml` | Gateway API route on the shared gateway's HTTPS listener |
+| `30-authpolicy.yaml` | Kuadrant AuthPolicy (who may call) |
+| `40-ratelimitpolicy.yaml` | Kuadrant RateLimitPolicy (how often) |
+| `50-externalsecrets.yaml` | API keys synced from Vault into `kuadrant-system` |
+
+| Folder | Shows | Expect |
+|---|---|---|
+| `rhcl-ex-public` (`hello`) | Anonymous access, route-wide limit of 5 requests / 10s | `200`, then `429` |
+| `rhcl-ex-apikey` (`echo`) | API keys from Vault; per-caller limits by plan (free 3 / 10s, gold 10 / 10s) | `401` without a key; `200` with one; bob (free) hits `429`, alice (gold) doesn't |
+| `rhcl-ex-locked` (`locked`) | A route with no AuthPolicy | `403` from the gateway's deny-all default |
+
+The hostnames are `<name>.api.example.internal`. Change them in each `20-httproute.yaml` if your gateway
+uses another domain. They must fall under `gateway.hostname` in `site/platform-values.yaml`.
+
+**Deploying them**
+- With GitOps, the `rhcl-examples` ApplicationSet deploys every folder.
+- Set `examples.enabled: false` in `gitops/values.yaml` to remove them.
+- Without Argo CD, apply a folder directly, for example:
+
+```bash
+oc apply -f examples/rhcl-ex-public/
+```
+
+**Testing them**
+
+`scripts/test-examples.sh` runs the expectations above against the gateway IP, with no DNS needed.

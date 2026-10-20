@@ -1,0 +1,17 @@
+# 5 requests per 10 seconds for the whole route, shared by all callers.
+# The 6th request in a window gets 429 Too Many Requests.
+apiVersion: kuadrant.io/v1
+kind: RateLimitPolicy
+metadata:
+  name: hello
+  namespace: rhcl-ex-public
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: hello
+  limits:
+    total:
+      rates:
+        - limit: 5
+          window: 10s

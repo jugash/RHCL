@@ -1,9 +1,0 @@
-# No AuthPolicy of its own (auth.mode: none), so the gateway's deny-all default applies: expect 403.
-# Shows that a forgotten policy does not expose an API.
-# Hostname is set by the ApplicationSet: locked.<examples.domain>.
-demo:
-  enabled: true
-auth:
-  mode: none
-rateLimit:
-  enabled: false
