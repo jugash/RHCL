@@ -1,0 +1,10 @@
+# Public API: no credentials, but a low route-wide limit so a 429 is easy to trigger.
+# Hostname is set by the ApplicationSet: hello.<examples.domain>.
+demo:
+  enabled: true
+auth:
+  mode: public
+rateLimit:
+  total:
+    limit: 5
+    window: 10s

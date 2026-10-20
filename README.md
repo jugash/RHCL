@@ -40,7 +40,7 @@ bootstrap/bootstrap.sh  (run once by hand)
 
 ```
 bootstrap/          one-time setup: GitOps operator, RBAC, health checks, root Application
-gitops/             app-of-apps chart (Applications, sync waves, the apis/ ApplicationSet)
+gitops/             app-of-apps chart (Applications, sync waves, the apis/ and examples/ ApplicationSets)
 charts/
   rhcl-operators/   OLM subscriptions: servicemeshoperator3, rhcl-operator
   rhcl-platform/    IstioCNI, Istio, mTLS mode, Kuadrant, Gateway, TLSPolicy, default policies
@@ -48,11 +48,13 @@ charts/
   api/              one API: HTTPRoute + AuthPolicy + RateLimitPolicy + API-key ExternalSecrets
 site/               values for this cluster
 apis/               one file per API
+examples/           test APIs in their own rhcl-ex-* namespaces (examples.enabled in gitops/values.yaml)
 vault/setup.sh      one-time Vault configuration (run by a Vault admin)
 scripts/
   vault-create-api-key.sh    generate an API key in Vault
   routes-to-api-values.py    turn existing Routes/Ingresses into apis/ files
   verify.sh                  check each layer and report what is not ready
+  test-examples.sh           end-to-end tests against examples/, plus no-impact checks
 ```
 
 ## Setup
@@ -63,7 +65,7 @@ scripts/
 |---|---|
 | `site/platform-values.yaml` | `gateway.hostname`, `tls.issuer.name`, and the LB IP in `gateway.serviceAnnotations` |
 | `site/vault-store-values.yaml` | `server` (Vault URL) |
-| `apis/echo-api/echo-api.yaml` | `hostnames`: under your gateway domain |
+| `gitops/values.yaml` | `examples.domain`: must be under `gateway.hostname` |
 
 ```bash
 git init -b main && git add . && git commit -m "Connectivity Link platform"
@@ -90,10 +92,14 @@ It creates:
 
 If your API server uses a custom certificate from your internal CA, edit the script so it passes that CA instead of `kube-root-ca.crt`.
 
-Create the demo API's first key:
+Create the keys used by the API-key example:
 
 ```bash
-scripts/vault-create-api-key.sh echo-api alice
+scripts/vault-create-api-key.sh echo alice
+```
+
+```bash
+scripts/vault-create-api-key.sh echo bob
 ```
 
 ### 3. Bootstrap the cluster (the only `oc apply`)
@@ -132,35 +138,37 @@ After the first sync, commit two changes to `site/` so that operator upgrades do
 - Set `mesh.version` in `site/platform-values.yaml` to the output of `oc get istio default -o jsonpath='{.spec.version}'`.
 - Set `installPlanApproval: Manual` in `site/operators-values.yaml`.
 
-### 6. Try the demo API
+### 6. Test with the examples
 
-`KEY` is the output of `vault-create-api-key.sh` in step 2.
+`examples/` deploys three small test APIs. Nothing in it touches your current setup:
+
+- **Own namespaces.** Each example runs in a new `rhcl-ex-*` namespace. Only those namespaces get the sidecar and gateway labels.
+- **Own address.** The gateway has its own LoadBalancer IP and its own domain. The OpenShift router, its `*.apps` wildcard and your Routes/Ingresses stay as they are.
+- **No DNS needed.** The test script sends requests straight to the gateway IP with `curl --resolve`, so you don't need the DNS record from step 4 yet.
+
+| Example | Expect |
+|---|---|
+| `hello` (`rhcl-ex-public`) | `200` without credentials; `429` after 5 requests in 10s |
+| `echo` (`rhcl-ex-apikey`) | `401` without a key; `200` for alice and bob; bob (free, 3/10s) hits `429` while alice (gold) doesn't |
+| `locked` (`rhcl-ex-locked`) | `403`: no AuthPolicy, so the gateway's deny-all default applies |
+
+Run the tests. Add a few of your current Route URLs so the script also confirms they still respond:
 
 ```bash
-curl -i https://echo.api.example.internal/
+EXISTING_URLS="https://myapp.apps.ocp.example.internal/" scripts/test-examples.sh
 ```
 
-returns `401`: no credentials.
+What the script checks:
+
+- **Gateway:** certificate, HTTP→HTTPS redirect, every expectation in the table, per-user isolation, and that gateway→app traffic is mutual TLS.
+- **No impact:** no namespace outside the repo got the mesh or gateway labels, no HTTPRoute exists outside the repo's namespaces, and the default IngressController is still available.
+
+Pass `CACERT=<your internal CA file>` to verify the certificate instead of skipping verification.
+
+To remove the examples, set `examples.enabled: false` in `gitops/values.yaml` and push. Argo deletes the APIs, but not the `rhcl-ex-*` namespaces. To remove those too:
 
 ```bash
-curl -i -H "Authorization: APIKEY $KEY" https://echo.api.example.internal/
-```
-
-returns `200`.
-
-To see a rate limit, add a caller on the `free` plan (60 requests a minute) and call it 70 times:
-
-1. Create bob's key:
-
-```bash
-FREE=$(scripts/vault-create-api-key.sh echo-api bob)
-```
-
-2. Add `- user: bob` (plan `free`) under `consumers` in `apis/echo-api/echo-api.yaml`, commit, and wait for Argo to sync.
-3. Run the loop. The last calls return `429`:
-
-```bash
-for i in $(seq 1 70); do curl -s -o /dev/null -w '%{http_code} ' -H "Authorization: APIKEY $FREE" https://echo.api.example.internal/; done
+oc delete ns rhcl-ex-public rhcl-ex-apikey rhcl-ex-locked
 ```
 
 ## Exposing an API

@@ -10,3 +10,10 @@ externalSecrets:
 # One Argo CD Application per apis/<namespace>/<api>.yaml.
 apis:
   enabled: true
+
+# Test APIs from examples/ (see scripts/test-examples.sh). Set to false to remove them all.
+examples:
+  enabled: true
+  # Each example is served at <file name>.<domain>. Must be covered by the gateway's
+  # main listener (gateway.hostname in site/platform-values.yaml).
+  domain: api.example.internal

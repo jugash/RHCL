@@ -2,46 +2,11 @@
 # Wave 2: one Application per apis/<namespace>/<api>.yaml, installed with charts/api.
 # The directory name is the namespace and the file name is the release name.
 # Adding an API is a commit; deleting the file removes it.
-apiVersion: argoproj.io/v1alpha1
-kind: ApplicationSet
-metadata:
-  name: rhcl-apis
-  namespace: {{ .Release.Namespace }}
-  annotations:
-    {{- include "gitops.wave" 2 | nindent 4 }}
-spec:
-  goTemplate: true
-  goTemplateOptions: ["missingkey=error"]
-  generators:
-    - git:
-        repoURL: {{ .Values.repoURL }}
-        revision: {{ .Values.revision }}
-        files:
-          - path: apis/*/*.yaml
-  template:
-    metadata:
-      name: {{`'api-{{ .path.basename }}-{{ trimSuffix ".yaml" .path.filename }}'`}}
-      annotations:
-        argocd.argoproj.io/sync-wave: "2"
-    spec:
-      project: rhcl
-      source:
-        repoURL: {{ .Values.repoURL }}
-        targetRevision: {{ .Values.revision }}
-        path: charts/api
-        helm:
-          releaseName: {{`'{{ trimSuffix ".yaml" .path.filename }}'`}}
-          valueFiles:
-            - {{`'../../{{ .path.path }}/{{ .path.filename }}'`}}
-      destination:
-        server: https://kubernetes.default.svc
-        namespace: {{`'{{ .path.basename }}'`}}
-      syncPolicy:
-        {{- include "gitops.syncPolicy" dict | nindent 8 }}
-        # Sidecar injection plus permission to attach to the gateway.
-        # Existing pods only get a sidecar after a restart.
-        managedNamespaceMetadata:
-          labels:
-            istio-injection: enabled
-            api-gateway-access: "true"
+{{ include "gitops.apiAppSet" (dict "root" . "name" "rhcl-apis" "dir" "apis" "appPrefix" "api") }}
+{{- end }}
+{{- if .Values.examples.enabled }}
+---
+# Wave 2: the test APIs in examples/. Each lives in its own new rhcl-ex-* namespace,
+# so existing namespaces, Routes and Ingresses are never touched.
+{{ include "gitops.apiAppSet" (dict "root" . "name" "rhcl-examples" "dir" "examples" "appPrefix" "example" "domain" .Values.examples.domain) }}
 {{- end }}
