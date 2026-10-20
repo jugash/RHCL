@@ -1,0 +1,132 @@
+# Ingress allow-rules for clusters whose NetworkPolicies restrict traffic between namespaces.
+# Allow-only: they never block egress. But any policy that selects a pod turns on deny-by-default
+# for that pod's ingress, so delete this file if your cluster has no such restrictions.
+# The gateway asks Authorino (auth) and Limitador (rate limits) about every request.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-kuadrant-from-gateway
+  namespace: kuadrant-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: api-gateway
+          podSelector:
+            matchLabels:
+              gateway.networking.k8s.io/gateway-name: api-gateway
+      ports:
+        - port: 50051
+          protocol: TCP
+        - port: 8081
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-allow-same-namespace
+  namespace: kuadrant-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+---
+# Prometheus (cluster and user-workload monitoring) scrapes metrics.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-allow-from-monitoring
+  namespace: kuadrant-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              network.openshift.io/policy-group: monitoring
+---
+# The API server (host network) calls operator webhooks.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-allow-from-host-network
+  namespace: kuadrant-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              policy-group.network.openshift.io/host-network: ""
+---
+# The OpenShift console loads the Connectivity Link console plugin.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-allow-from-console
+  namespace: kuadrant-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-console
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-allow-same-namespace
+  namespace: servicemesh-operator
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+---
+# Prometheus (cluster and user-workload monitoring) scrapes metrics.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-allow-from-monitoring
+  namespace: servicemesh-operator
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              network.openshift.io/policy-group: monitoring
+---
+# The API server (host network) calls operator webhooks.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-allow-from-host-network
+  namespace: servicemesh-operator
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              policy-group.network.openshift.io/host-network: ""

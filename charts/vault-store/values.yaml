@@ -21,3 +21,8 @@ trustClusterCABundle: true
 # Only these namespaces may use the store. API-key Secrets live in kuadrant-system.
 allowedNamespaces:
   - kuadrant-system
+
+# Ingress allow-rules for the External Secrets namespace (webhook, monitoring, same namespace),
+# for clusters whose NetworkPolicies restrict traffic between namespaces.
+networkPolicies:
+  enabled: false

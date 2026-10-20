@@ -1,0 +1,50 @@
+# Ingress allow-rules for clusters whose NetworkPolicies restrict traffic between namespaces.
+# Allow-only: they never block egress. But any policy that selects a pod turns on deny-by-default
+# for that pod's ingress, so delete this file if your cluster has no such restrictions.
+# API clients reach the gateway through its LoadBalancer, from anywhere.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-gateway-from-clients
+  namespace: api-gateway
+spec:
+  podSelector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: api-gateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 80
+          protocol: TCP
+        - port: 443
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-allow-same-namespace
+  namespace: api-gateway
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+---
+# Prometheus (cluster and user-workload monitoring) scrapes metrics.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-allow-from-monitoring
+  namespace: api-gateway
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              network.openshift.io/policy-group: monitoring

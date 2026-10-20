@@ -4,3 +4,7 @@ kvMount: secret
 auth:
   mountPath: ocp-rhcl
   role: eso-rhcl
+
+# Your cluster restricts traffic between namespaces: allow the External Secrets webhook.
+networkPolicies:
+  enabled: true

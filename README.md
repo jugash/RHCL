@@ -275,6 +275,56 @@ Not converted automatically:
 - **Reencrypt Routes.** The app can serve plain HTTP inside the mesh, because the sidecars handle mTLS.
 - **HAProxy annotations** other than `timeout`. For example, `ip_whitelist` becomes an AuthPolicy rule on `source.address`.
 
+## Clusters that restrict traffic between namespaces
+
+If your NetworkPolicies isolate namespaces from each other, set `networkPolicies.enabled: true` in
+`site/platform-values.yaml` and `site/vault-store-values.yaml`. Both are already on in this repo. For
+the plain manifests, the `*-networkpolicies.yaml` file in each step does the same.
+
+The policies only add **ingress** allow-rules for the platform's own pods:
+
+| Into | From | Port |
+|---|---|---|
+| istiod (`istio-system`) | gateway pods; namespaces labelled `istio-injection=enabled` or `istio.io/rev` | 15012 (config, certificates) |
+| istiod | API server (host network) | 15017 (injection and validation webhooks) |
+| gateway pods (`api-gateway`) | anywhere (clients via the LoadBalancer) | 80, 443 |
+| Authorino, Limitador (`kuadrant-system`) | gateway pods | 50051, 8081 |
+| `kuadrant-system`, `servicemesh-operator`, `external-secrets` | API server (host network) | any (operator webhooks) |
+| `kuadrant-system` | `openshift-console` | any (console plugin) |
+| all of the above | same namespace; cluster monitoring | any |
+
+**What isn't covered**
+- **`istio-cni`** needs no policy. No traffic is ever sent to it: it configures each pod's network locally on the node.
+- **App namespaces** need their own rule allowing the gateway's pods to reach the app's container port. `examples/*/60-networkpolicy.yaml` shows how.
+- **AdminNetworkPolicy.** If your isolation comes from an AdminNetworkPolicy with a `Deny` action, NetworkPolicies cannot override it. Your cluster admin has to add an exception (an ANP rule with `Allow` or `Pass`) for the flows above.
+
+**If you also restrict egress**, these flows need allowing from the source namespace:
+
+| From | To | Port |
+|---|---|---|
+| gateway pods, sidecars | istiod | 15012 |
+| gateway pods | Authorino, Limitador | 50051, 8081 |
+| gateway pods | your backends | their container ports |
+| gateway pods | the registry hosting Kuadrant's Wasm module (`registry.redhat.io` or your mirror) | 443 |
+| istiod, operators, Authorino, External Secrets, istio-cni | API server | 6443 |
+| Authorino | your OIDC provider | 443 |
+| External Secrets | Vault | 8200 |
+| everything | OpenShift DNS | 5353 (UDP and TCP) |
+
+**Finding what's blocked**
+- **The gateway can't reach istiod.** The gateway pod never becomes ready and logs connection errors to `istiod.istio-system.svc:15012`:
+
+```bash
+oc logs -n api-gateway deploy/api-gateway-istio | grep -i -m5 'istiod\|xds\|timeout'
+```
+
+- **The gateway can't reach Kuadrant.** Requests fail with `500`/`503`, and the gateway's log shows the Wasm filter failing to reach Authorino or Limitador.
+- **To see which policies apply** in a namespace:
+
+```bash
+oc get networkpolicy -n istio-system
+```
+
 ## Notes
 
 - **Don't create** a GatewayClass with `controllerName: openshift.io/gateway-controller/v1`. That makes OpenShift install a second, gateway-only Istio that is not part of this mesh, and the ingress operator tries to subscribe to Service Mesh 3 in `openshift-operators`, which clashes with this repo's subscription.

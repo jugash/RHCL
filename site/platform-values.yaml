@@ -18,3 +18,7 @@ tls:
     group: cert-manager.io
     kind: ClusterIssuer
     name: internal-ca
+
+# Your cluster restricts traffic between namespaces: add allow-rules for the platform's own pods.
+networkPolicies:
+  enabled: true

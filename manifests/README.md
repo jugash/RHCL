@@ -13,6 +13,10 @@ can't use Helm or Argo CD. Everything is applied with `oc`.
 
 Each step needs the CRDs from the step before it, so apply them in order and wait in between.
 
+The `*-networkpolicies.yaml` files add ingress allow-rules for clusters whose NetworkPolicies restrict
+traffic between namespaces (see "Clusters that restrict traffic between namespaces" in the main README).
+Delete them if your cluster has no such restrictions.
+
 ## Before applying
 
 Edit the lines marked `EDIT`:

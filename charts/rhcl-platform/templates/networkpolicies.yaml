@@ -1,0 +1,105 @@
+{{- if .Values.networkPolicies.enabled }}
+{{- $np := .Values.networkPolicies }}
+# Ingress allow-rules for the platform's own pods, for clusters whose NetworkPolicies restrict
+# traffic between namespaces. They only ever allow; they never restrict egress.
+# istio-cni needs none: nothing connects to it (it configures pods locally on each node).
+
+# --- istio-system -----------------------------------------------------------------------------
+# Sidecars and gateways fetch config and certificates from istiod.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-istiod-from-mesh
+  namespace: istio-system
+spec:
+  podSelector:
+    matchLabels:
+      app: istiod
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        {{- include "platform.np.gatewayPeer" . | nindent 8 }}
+        - namespaceSelector:
+            matchLabels:
+              istio-injection: enabled
+        - namespaceSelector:
+            matchExpressions:
+              - key: istio.io/rev
+                operator: Exists
+      ports:
+        - port: 15012
+          protocol: TCP
+---
+# The API server calls istiod's sidecar-injection and validation webhooks (Service 443 -> pod 15017).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-istiod-from-apiserver
+  namespace: istio-system
+spec:
+  podSelector:
+    matchLabels:
+      app: istiod
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              policy-group.network.openshift.io/host-network: ""
+      ports:
+        - port: 15017
+          protocol: TCP
+---
+{{ include "platform.np.common" (dict "ns" "istio-system") }}
+---
+# --- gateway namespace ------------------------------------------------------------------------
+# API clients reach the gateway through its LoadBalancer, from anywhere.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-gateway-from-clients
+  namespace: {{ .Values.gateway.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: {{ .Values.gateway.name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        {{- if .Values.gateway.httpRedirect }}
+        - port: 80
+          protocol: TCP
+        {{- end }}
+        - port: 443
+          protocol: TCP
+---
+{{ include "platform.np.common" (dict "ns" .Values.gateway.namespace) }}
+---
+# --- kuadrant-system --------------------------------------------------------------------------
+# The gateway asks Authorino (auth) and Limitador (rate limits) about every request.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-kuadrant-from-gateway
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        {{- include "platform.np.gatewayPeer" . | nindent 8 }}
+      ports:
+        - port: {{ $np.authorinoGrpcPort }}
+          protocol: TCP
+        - port: {{ $np.limitadorGrpcPort }}
+          protocol: TCP
+---
+{{ include "platform.np.common" (dict "ns" .Release.Namespace "hostNetwork" true "console" true) }}
+---
+# --- Service Mesh operator --------------------------------------------------------------------
+{{ include "platform.np.common" (dict "ns" $np.serviceMeshOperatorNamespace "hostNetwork" true) }}
+{{- end }}

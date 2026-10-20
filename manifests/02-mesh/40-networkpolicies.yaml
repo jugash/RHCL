@@ -1,0 +1,83 @@
+# Ingress allow-rules for clusters whose NetworkPolicies restrict traffic between namespaces.
+# Allow-only: they never block egress. But any policy that selects a pod turns on deny-by-default
+# for that pod's ingress, so delete this file if your cluster has no such restrictions.
+# Sidecars and gateways fetch config and certificates from istiod.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-istiod-from-mesh
+  namespace: istio-system
+spec:
+  podSelector:
+    matchLabels:
+      app: istiod
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: api-gateway
+          podSelector:
+            matchLabels:
+              gateway.networking.k8s.io/gateway-name: api-gateway
+        - namespaceSelector:
+            matchLabels:
+              istio-injection: enabled
+        - namespaceSelector:
+            matchExpressions:
+              - key: istio.io/rev
+                operator: Exists
+      ports:
+        - port: 15012
+          protocol: TCP
+---
+# The API server calls istiod's sidecar-injection and validation webhooks (Service 443 -> pod 15017).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-istiod-from-apiserver
+  namespace: istio-system
+spec:
+  podSelector:
+    matchLabels:
+      app: istiod
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              policy-group.network.openshift.io/host-network: ""
+      ports:
+        - port: 15017
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-allow-same-namespace
+  namespace: istio-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+---
+# Prometheus (cluster and user-workload monitoring) scrapes metrics.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rhcl-allow-from-monitoring
+  namespace: istio-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              network.openshift.io/policy-group: monitoring

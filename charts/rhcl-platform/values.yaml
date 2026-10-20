@@ -45,3 +45,14 @@ defaults:
     enabled: true
     limit: 100
     window: 10s
+
+# Ingress allow-rules for the platform's own namespaces (istio-system, the gateway namespace,
+# kuadrant-system, the Service Mesh operator namespace), for clusters whose NetworkPolicies
+# restrict traffic between namespaces. Allow-only and ingress-only: they never block anything.
+# Note: a NetworkPolicy cannot override an AdminNetworkPolicy "Deny"; that needs an ANP exception.
+networkPolicies:
+  enabled: false
+  serviceMeshOperatorNamespace: servicemesh-operator
+  # Ports the gateway uses to call Kuadrant (Authorino and Limitador defaults).
+  authorinoGrpcPort: 50051
+  limitadorGrpcPort: 8081
