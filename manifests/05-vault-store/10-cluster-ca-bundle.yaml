@@ -1,0 +1,9 @@
+# OpenShift fills ca-bundle.crt with the cluster trust bundle (public CAs + your additionalTrustBundle),
+# which External Secrets uses to trust Vault's TLS certificate. Leave data empty.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-ca-bundle
+  namespace: external-secrets
+  labels:
+    config.openshift.io/inject-trusted-cabundle: "true"

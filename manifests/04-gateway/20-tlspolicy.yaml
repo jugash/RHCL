@@ -1,0 +1,16 @@
+# Issues one certificate per HTTPS listener through cert-manager.
+# EDIT: issuerRef.name, your existing ClusterIssuer (backed by your internal CA).
+apiVersion: kuadrant.io/v1
+kind: TLSPolicy
+metadata:
+  name: api-gateway-tls
+  namespace: api-gateway
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: api-gateway
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: internal-ca

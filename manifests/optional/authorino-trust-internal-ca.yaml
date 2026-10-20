@@ -1,0 +1,15 @@
+# Only for OIDC/JWT auth with an IdP whose certificate is signed by an internal CA. NOT applied by apply.sh.
+# Authorino fetches the IdP's discovery document and signing keys over HTTPS, so it must trust that CA.
+#
+# 1. Make sure the CA is in the cluster trust bundle: oc get proxy cluster -o jsonpath='{.spec.trustedCA.name}'
+# 2. Apply this ConfigMap; OpenShift fills ca-bundle.crt with that bundle.
+# 3. Mount it into Authorino (the Kuadrant operator owns this CR, so re-check after upgrades):
+#    oc patch authorino authorino -n kuadrant-system --type merge -p \
+#      '{"spec":{"volumes":{"items":[{"name":"internal-ca","mountPath":"/etc/ssl/certs","configMaps":["internal-ca-bundle"],"items":[{"key":"ca-bundle.crt","path":"ca-bundle.crt"}]}]}}}'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: internal-ca-bundle
+  namespace: kuadrant-system
+  labels:
+    config.openshift.io/inject-trusted-cabundle: "true"

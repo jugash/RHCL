@@ -1,0 +1,7 @@
+# Required on OpenShift for sidecar mode (replaces the privileged istio-init container).
+apiVersion: sailoperator.io/v1
+kind: IstioCNI
+metadata:
+  name: default
+spec:
+  namespace: istio-cni

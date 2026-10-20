@@ -1,0 +1,10 @@
+# Namespaces for the Istio control plane and the Istio CNI node agent.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: istio-system
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: istio-cni

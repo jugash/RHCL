@@ -49,6 +49,7 @@ charts/
 site/               values for this cluster
 apis/               one file per API
 examples/           test APIs as plain manifests, each in its own rhcl-ex-* namespace
+manifests/          the platform as plain manifests + oc-only apply.sh, for clusters without Helm/Argo CD
 vault/setup.sh      one-time Vault configuration (run by a Vault admin)
 scripts/
   vault-create-api-key.sh    generate an API key in Vault
@@ -290,3 +291,4 @@ Not converted automatically:
 - **NetworkPolicies.** In namespaces that have them, allow ingress from `api-gateway`. The Istio sidecars also need to reach `istio-system`.
 - **Pruning safety.** Subscriptions and namespaces carry `argocd.argoproj.io/sync-options: Delete=false`, so removing something from Git never uninstalls the operators or deletes a namespace.
 - **Without Argo CD.** The charts in `charts/` still work with plain `helm upgrade --install` in wave order. Pass `site/*.yaml` and `apis/*/*.yaml` as values files, and label app namespaces with `istio-injection=enabled` and `api-gateway-access=true`.
+- **Without Helm either.** [manifests/](manifests/README.md) has the whole platform as plain YAML in numbered steps, with `manifests/apply.sh` (needs only `oc`).

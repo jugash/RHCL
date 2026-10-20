@@ -1,0 +1,17 @@
+# Default rate limit for every route without its own RateLimitPolicy: 100 requests / 10s per route.
+apiVersion: kuadrant.io/v1
+kind: RateLimitPolicy
+metadata:
+  name: api-gateway-default-limit
+  namespace: api-gateway
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: api-gateway
+  defaults:
+    limits:
+      default:
+        rates:
+          - limit: 100
+            window: 10s

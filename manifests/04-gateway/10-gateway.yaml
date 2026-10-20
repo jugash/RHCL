@@ -1,0 +1,37 @@
+# Shared API gateway. Istio deploys it as a Deployment + LoadBalancer Service in api-gateway.
+# EDIT: the https listener's hostname (your API domain). Point that wildcard at the gateway's address in DNS.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: api-gateway
+  namespace: api-gateway
+spec:
+  gatewayClassName: istio
+  # Optional: pin the LoadBalancer IP so the DNS record stays valid (MetalLB example).
+  # infrastructure:
+  #   annotations:
+  #     metallb.io/loadBalancerIPs: 10.0.0.50
+  listeners:
+    # Only the redirect route (same namespace) may attach to plain HTTP.
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: "*.api.example.internal"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          # Created by the TLSPolicy through cert-manager.
+          - kind: Secret
+            name: api-gateway-https-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              api-gateway-access: "true"

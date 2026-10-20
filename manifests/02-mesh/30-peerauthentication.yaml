@@ -1,0 +1,11 @@
+# Mesh-wide mTLS mode. PERMISSIVE: meshed pods accept both mTLS (from the gateway and other
+# sidecars) and plain traffic (e.g. from the OpenShift router while Routes still exist).
+# Switch to STRICT once no meshed app is reached through an OpenShift Route any more.
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system
+spec:
+  mtls:
+    mode: PERMISSIVE

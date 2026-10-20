@@ -1,0 +1,5 @@
+# The shared API gateway runs here.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: api-gateway

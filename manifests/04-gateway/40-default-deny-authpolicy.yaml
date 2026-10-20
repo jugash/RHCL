@@ -1,0 +1,26 @@
+# Default for every route on the gateway: deny, unless the route has its own AuthPolicy.
+# Nothing is exposed by accident when someone forgets a policy.
+apiVersion: kuadrant.io/v1
+kind: AuthPolicy
+metadata:
+  name: api-gateway-default-deny
+  namespace: api-gateway
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: api-gateway
+  defaults:
+    rules:
+      authorization:
+        deny-all:
+          opa:
+            rego: "allow = false"
+      response:
+        unauthorized:
+          headers:
+            content-type:
+              value: application/json
+          body:
+            value: |
+              {"error": "Forbidden", "message": "This route has no AuthPolicy. Access is denied by default."}
