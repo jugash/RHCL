@@ -73,7 +73,8 @@ rateLimit:
     limit: 5000
     window: 1m
 
-# A small echo backend for trying out the gateway.
+# A small nginx backend for trying out the gateway (replies with the request it received).
 demo:
   enabled: false
-  image: quay.io/kuadrant/authorino-examples:talker-api
+  # Any nginx image works; the pod config makes it run as non-root on 8080.
+  image: docker.io/library/nginx:1.28

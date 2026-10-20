@@ -4,7 +4,7 @@ Files are numbered so `oc apply -f <folder>` creates the namespace first:
 | File | What it is |
 |---|---|
 | `00-namespace.yaml` | A new namespace, labelled for the Istio sidecar and for attaching to the gateway |
-| `10-app.yaml` | Echo backend (Deployment + Service) that replies with the request it received |
+| `10-app.yaml` | nginx backend (ConfigMap + Deployment + Service) that replies with the request it received; runs as non-root on 8080 |
 | `20-httproute.yaml` | Gateway API route on the shared gateway's HTTPS listener |
 | `30-authpolicy.yaml` | Kuadrant AuthPolicy (who may call) |
 | `40-ratelimitpolicy.yaml` | Kuadrant RateLimitPolicy (how often) |
@@ -32,7 +32,7 @@ oc apply -f examples/rhcl-ex-public/
 **Network policies**
 
 Each example namespace denies all traffic except:
-- from the gateway's pods (label `gateway.networking.k8s.io/gateway-name: api-gateway`) to the app's container port, `3000`;
+- from the gateway's pods (label `gateway.networking.k8s.io/gateway-name: api-gateway`) to the app's container port, `8080`;
 - from the sidecar to istiod (`15012`) and to DNS (`5353`).
 
 A passing `scripts/test-examples.sh` therefore shows the gateway works with everything else locked down.

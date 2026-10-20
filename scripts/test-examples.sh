@@ -98,7 +98,7 @@ else
   if [[ $codes == *429* ]]; then ok "bob's free limit 3/10s enforced: $codes"; else ko "no 429 for bob in 6 requests: $codes"; fi
   expect "alice unaffected by bob's limit" 200 "$(code "$echo_host" / -H "Authorization: APIKEY $alice")"
 
-  # The echo backend returns the request headers it received. The sidecar adds
+  # The nginx backend echoes the X-Forwarded-Client-Cert header it received. The sidecar adds
   # X-Forwarded-Client-Cert with the gateway's SPIFFE identity when the hop was mutual TLS.
   echo_body=$(body "$echo_host" / -H "Authorization: APIKEY $alice")
   if grep -qi 'x-forwarded-client-cert.*spiffe://' <<<"$echo_body"; then

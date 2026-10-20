@@ -1,5 +1,32 @@
 {{- if .Values.demo.enabled }}
 {{- $name := printf "%s-demo" (include "api.name" .) }}
+# nginx that replies with what it received. Runs under the restricted-v2 SCC: non-root on 8080,
+# writable emptyDirs for pid file and cache, nginx started directly (no root entrypoint scripts).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+data:
+  nginx.conf: |
+    worker_processes 1;
+    error_log /dev/stderr warn;
+    pid /tmp/nginx.pid;
+
+    events {
+      worker_connections 1024;
+    }
+
+    http {
+      access_log /dev/stdout;
+      server {
+        listen 8080;
+        location / {
+          default_type text/plain;
+          return 200 "app: {{ $name }}\nhost: $host\nuri: $request_uri\nx-forwarded-client-cert: $http_x_forwarded_client_cert\n";
+        }
+      }
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,14 +42,42 @@ spec:
         app: {{ $name }}
     spec:
       containers:
-        - name: echo
+        - name: nginx
           image: {{ .Values.demo.image }}
+          command: ["nginx", "-g", "daemon off;"]
           ports:
-            - containerPort: 3000
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           resources:
             requests:
               cpu: 10m
-              memory: 32Mi
+              memory: 16Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+            - name: cache
+              mountPath: /var/cache/nginx
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $name }}
+        - name: cache
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -34,5 +89,5 @@ spec:
   ports:
     - name: http
       port: 80
-      targetPort: 3000
+      targetPort: 8080
 {{- end }}

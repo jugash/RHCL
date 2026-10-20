@@ -1,6 +1,6 @@
 # Locks the namespace down, then opens only what the API needs. Shows that the gateway still
 # reaches the app when everything else is denied (scripts/test-examples.sh checks it).
-# NetworkPolicy ports are pod ports: 3000 is the echo container's port, not the Service's 80.
+# NetworkPolicy ports are pod ports: 8080 is the nginx container's port, not the Service's 80.
 
 # 1. Deny all traffic in and out of every pod in the namespace.
 apiVersion: networking.k8s.io/v1
@@ -36,7 +36,7 @@ spec:
             matchLabels:
               gateway.networking.k8s.io/gateway-name: api-gateway
       ports:
-        - port: 3000
+        - port: 8080
           protocol: TCP
 ---
 # 3. Let the Istio sidecar fetch its config and certificates from istiod, and resolve names.

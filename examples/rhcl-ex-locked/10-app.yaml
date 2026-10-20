@@ -1,4 +1,35 @@
-# Echo backend: replies with the request it received (headers included).
+# Backend: plain nginx that replies with what it received, including X-Forwarded-Client-Cert,
+# which the Istio sidecar adds when the gateway -> app hop is mutual TLS.
+#
+# Runs under OpenShift's default restricted-v2 SCC (random non-root UID, no capabilities):
+# listens on 8080, keeps its pid file and cache in writable emptyDirs, and starts nginx directly
+# instead of the image's entrypoint scripts (which expect root).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: locked-nginx
+  namespace: rhcl-ex-locked
+data:
+  nginx.conf: |
+    worker_processes 1;
+    error_log /dev/stderr warn;
+    pid /tmp/nginx.pid;
+
+    events {
+      worker_connections 1024;
+    }
+
+    http {
+      access_log /dev/stdout;
+      server {
+        listen 8080;
+        location / {
+          default_type text/plain;
+          return 200 "app: locked\nhost: $host\nuri: $request_uri\nx-forwarded-client-cert: $http_x_forwarded_client_cert\n";
+        }
+      }
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,14 +46,42 @@ spec:
         app: locked
     spec:
       containers:
-        - name: echo
-          image: quay.io/kuadrant/authorino-examples:talker-api
+        - name: nginx
+          image: docker.io/library/nginx:1.28
+          command: ["nginx", "-g", "daemon off;"]
           ports:
-            - containerPort: 3000
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           resources:
             requests:
               cpu: 10m
-              memory: 32Mi
+              memory: 16Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+            - name: cache
+              mountPath: /var/cache/nginx
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: locked-nginx
+        - name: cache
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -35,4 +94,4 @@ spec:
   ports:
     - name: http
       port: 80
-      targetPort: 3000
+      targetPort: 8080
