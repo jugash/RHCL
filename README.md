@@ -49,6 +49,7 @@ charts/
 site/               values for this cluster
 apis/               one file per API
 examples/           test APIs as plain manifests, each in its own rhcl-ex-* namespace
+oidc-clients/       example Keycloak clients for API callers (not deployed)
 manifests/          the platform as plain manifests + oc-only apply.sh, for clusters without Helm/Argo CD
 vault/setup.sh      one-time Vault configuration (run by a Vault admin)
 scripts/
@@ -215,6 +216,7 @@ How the pieces fit:
   - for a JWT, the caller is `sub` and the plan comes from the `plan` claim (`auth.oidc.planClaim`).
 - **Unlisted plans.** A caller whose plan is not in `rateLimit.perUser.plans` gets only the route-wide `total` limit.
 - **Existing pods.** In a namespace that already existed, existing pods get the sidecar only after a restart: `oc rollout restart deployment -n <namespace>`.
+- **OIDC callers.** [oidc-clients/](oidc-clients/README.md) has example Keycloak clients: a single-page app, a server-side web app and a backend. Each one shows its redirect URIs and web origins, and the `aud` and `plan` claims the AuthPolicy reads.
 
 ### Trusting an internal CA for OIDC
 

@@ -1,0 +1,39 @@
+# A backend that calls the orders API on its own behalf, with no user involved.
+# Client credentials grant: serviceAccountsEnabled turns it on, and Keycloak creates the user
+# service-account-billing-service, whose ID is the token's "sub" (the caller the gateway's
+# rate limits count). No browser, so no redirectUris, postLogoutRedirectUris or webOrigins.
+apiVersion: keycloak.jugash.com/v1alpha1
+kind: KeycloakClient
+metadata:
+  name: billing-service
+  namespace: billing
+spec:
+  realm: api
+  clientId: billing-service
+  name: "Billing service"
+  publicClient: false
+  serviceAccountsEnabled: true
+  standardFlowEnabled: false
+  directAccessGrantsEnabled: false
+  defaultClientScopes:
+    - roles
+  credentialsSecretRef:
+    name: billing-service-oidc
+  protocolMappers:
+    - name: orders-api-audience
+      protocol: openid-connect
+      protocolMapper: oidc-audience-mapper
+      config:
+        included.custom.audience: orders-api
+        access.token.claim: "true"
+        id.token.claim: "false"
+    # A service has no user attributes to read, so its plan is fixed here.
+    - name: plan
+      protocol: openid-connect
+      protocolMapper: oidc-hardcoded-claim-mapper
+      config:
+        claim.name: plan
+        claim.value: gold
+        jsonType.label: String
+        access.token.claim: "true"
+        id.token.claim: "false"

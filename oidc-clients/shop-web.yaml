@@ -1,0 +1,58 @@
+# A single-page app that signs users in and calls the orders API with their token.
+# Public client: a browser can't keep a secret, so it uses PKCE instead.
+apiVersion: keycloak.jugash.com/v1alpha1
+kind: KeycloakClient
+metadata:
+  name: shop-web
+  # The app's namespace. A public client gets no credentials Secret.
+  namespace: shop
+spec:
+  realm: api
+  clientId: shop-web
+  name: "Shop web app"
+  publicClient: true
+  standardFlowEnabled: true          # browser login (authorization code + PKCE)
+  directAccessGrantsEnabled: false
+  rootUrl: "https://shop.example.internal"
+  baseUrl: "/"
+  # Where Keycloak may send the user back after login. Keep these as narrow as you can:
+  # a wildcard host would let anyone receive your users' authorization codes.
+  # The Kyverno policy enforce-https-redirect-uris allows http:// only for localhost.
+  redirectUris:
+    - "https://shop.example.internal/*"
+    - "https://shop.apps.ocp.example.internal/*"   # legacy Route hostname, until it is retired
+    - "http://localhost:5173/*"                    # local development
+  postLogoutRedirectUris:
+    - "https://shop.example.internal/"
+    - "http://localhost:5173/"
+  # Origins allowed to call Keycloak's token endpoint from JavaScript. "+" = the origins of
+  # redirectUris. This is CORS on Keycloak only: calls to orders.api.example.internal need
+  # CORS on the gateway, or serve the API under the app's own hostname.
+  webOrigins:
+    - "+"
+  defaultClientScopes:
+    - profile
+    - email
+    - roles
+  protocolMappers:
+    # apis/shop/orders.yaml sets auth.oidc.audience: orders-api, so tokens must carry it.
+    - name: orders-api-audience
+      protocol: openid-connect
+      protocolMapper: oidc-audience-mapper
+      config:
+        included.custom.audience: orders-api
+        access.token.claim: "true"
+        id.token.claim: "false"
+    # Rate-limit plan from the user's "plan" attribute (auth.oidc.planClaim). Users
+    # without one get auth.defaultPlan.
+    - name: plan
+      protocol: openid-connect
+      protocolMapper: oidc-usermodel-attribute-mapper
+      config:
+        user.attribute: plan
+        claim.name: plan
+        jsonType.label: String
+        access.token.claim: "true"
+        id.token.claim: "false"
+  attributes:
+    pkce.code.challenge.method: S256
