@@ -11,6 +11,19 @@ mesh:
 kuadrant:
   enabled: true
 
+# Make Authorino trust an internal CA, e.g. for OIDC/JWT with an IdP whose certificate it signed.
+# When enabled, this chart owns the Authorino CR (instead of the Kuadrant operator creating it)
+# and mounts the CA bundle into it. Not needed if you only use API keys.
+authorino:
+  trustedCA:
+    enabled: false
+    # Empty = a ConfigMap that OpenShift fills with the cluster trust bundle. Add your CA to that
+    # bundle first: oc get proxy cluster -o jsonpath='{.spec.trustedCA.name}'
+    # Or name your own ConfigMap in the release namespace. It replaces the image's CAs, so it must
+    # be a full bundle: the public CAs plus yours.
+    configMap: ""
+    key: ca-bundle.crt
+
 gateway:
   name: api-gateway
   namespace: api-gateway

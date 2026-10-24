@@ -1,0 +1,43 @@
+{{- if and .Values.kuadrant.enabled .Values.authorino.trustedCA.enabled }}
+{{- $ca := .Values.authorino.trustedCA }}
+{{- if not $ca.configMap }}
+# OpenShift fills ca-bundle.crt with the cluster trust bundle (public CAs + the proxy's trustedCA).
+# Argo applies with server-side apply, so it owns only this label and never fights over the injected data.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authorino-ca-bundle
+  namespace: {{ .Release.Namespace }}
+  labels:
+    config.openshift.io/inject-trusted-cabundle: "true"
+---
+{{- end }}
+# We declare the Authorino CR ourselves, so we don't have to patch the one the Kuadrant operator makes.
+# The operator only creates it when it is missing. After that it server-side-applies just the TLS and
+# tracing fields, so the volume below stays ours. The name must be "authorino".
+# The settings below match what the operator would create.
+apiVersion: operator.authorino.kuadrant.io/v1beta1
+kind: Authorino
+metadata:
+  name: authorino
+  namespace: {{ .Release.Namespace }}
+spec:
+  clusterWide: true
+  listener:
+    tls:
+      enabled: false
+  oidcServer:
+    tls:
+      enabled: false
+  volumes:
+    items:
+      # Go reads every file in /etc/ssl/certs. On the UBI image this mount hides the image's own CAs,
+      # so the bundle must include the public CAs too (the injected cluster bundle does).
+      - name: trusted-ca
+        mountPath: /etc/ssl/certs
+        configMaps:
+          - {{ $ca.configMap | default "authorino-ca-bundle" }}
+        items:
+          - key: {{ $ca.key }}
+            path: ca-bundle.crt
+{{- end }}

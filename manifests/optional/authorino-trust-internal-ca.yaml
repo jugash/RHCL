@@ -2,14 +2,43 @@
 # Authorino fetches the IdP's discovery document and signing keys over HTTPS, so it must trust that CA.
 #
 # 1. Make sure the CA is in the cluster trust bundle: oc get proxy cluster -o jsonpath='{.spec.trustedCA.name}'
-# 2. Apply this ConfigMap; OpenShift fills ca-bundle.crt with that bundle.
-# 3. Mount it into Authorino (the Kuadrant operator owns this CR, so re-check after upgrades):
-#    oc patch authorino authorino -n kuadrant-system --type merge -p \
-#      '{"spec":{"volumes":{"items":[{"name":"internal-ca","mountPath":"/etc/ssl/certs","configMaps":["internal-ca-bundle"],"items":[{"key":"ca-bundle.crt","path":"ca-bundle.crt"}]}]}}}'
+# 2. oc apply -f manifests/optional/authorino-trust-internal-ca.yaml   (before or after step 03)
+#
+# We declare the Authorino CR ourselves, so we don't have to patch the one the Kuadrant operator makes.
+# The operator only creates it when it is missing. After that it server-side-applies just the TLS and
+# tracing fields, so the volume below stays ours.
+---
+# OpenShift fills ca-bundle.crt with the cluster trust bundle (public CAs + the proxy's trustedCA). Leave data empty.
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: internal-ca-bundle
+  name: authorino-ca-bundle
   namespace: kuadrant-system
   labels:
     config.openshift.io/inject-trusted-cabundle: "true"
+---
+# The settings below match what the Kuadrant operator would create. The name must be "authorino".
+apiVersion: operator.authorino.kuadrant.io/v1beta1
+kind: Authorino
+metadata:
+  name: authorino
+  namespace: kuadrant-system
+spec:
+  clusterWide: true
+  listener:
+    tls:
+      enabled: false
+  oidcServer:
+    tls:
+      enabled: false
+  volumes:
+    items:
+      # Go reads every file in /etc/ssl/certs. On the UBI image this mount hides the image's own CAs,
+      # so the bundle must include the public CAs too (the injected cluster bundle does).
+      - name: trusted-ca
+        mountPath: /etc/ssl/certs
+        configMaps:
+          - authorino-ca-bundle
+        items:
+          - key: ca-bundle.crt
+            path: ca-bundle.crt

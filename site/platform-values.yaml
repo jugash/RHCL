@@ -13,6 +13,11 @@ gateway:
   # Legacy hostnames moved off OpenShift Routes (see routes-to-api-values.py report).
   extraListeners: []
 
+# OIDC/JWT with an IdP behind an internal CA: let Authorino trust the cluster CA bundle.
+# authorino:
+#   trustedCA:
+#     enabled: true
+
 tls:
   issuer:
     group: cert-manager.io

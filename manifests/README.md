@@ -96,7 +96,7 @@ scripts/test-examples.sh
 | File | Use |
 |---|---|
 | `optional/apikey-secret.yaml` | An API key as a plain Secret, for clusters without Vault / External Secrets |
-| `optional/authorino-trust-internal-ca.yaml` | OIDC with an IdP behind an internal CA |
+| `optional/authorino-trust-internal-ca.yaml` | OIDC with an IdP behind an internal CA: declares the Authorino CR with the cluster CA bundle mounted |
 
 `apply.sh` doesn't apply either; each file explains how to use it.
 

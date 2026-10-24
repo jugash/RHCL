@@ -218,27 +218,22 @@ How the pieces fit:
 
 ### Trusting an internal CA for OIDC
 
-Authorino fetches your IdP's discovery document and keys over HTTPS. If the IdP's certificate comes from an internal CA, Authorino must trust it.
+Authorino fetches your IdP's discovery document and keys over HTTPS. If an internal CA signed the IdP's certificate, Authorino must trust that CA. If you only use API keys, you don't need this.
 
-To do that, add the CA to the cluster trust bundle (`oc get proxy cluster -o jsonpath='{.spec.trustedCA.name}'`) and mount the bundle into Authorino:
+1. Add the CA to the cluster trust bundle (`oc get proxy cluster -o jsonpath='{.spec.trustedCA.name}'`).
+2. In `site/platform-values.yaml`, set:
 
-1. Create a ConfigMap that OpenShift fills with the bundle:
-
-```bash
-oc create configmap internal-ca-bundle -n kuadrant-system
+```yaml
+authorino:
+  trustedCA:
+    enabled: true
 ```
 
-```bash
-oc label configmap internal-ca-bundle -n kuadrant-system config.openshift.io/inject-trusted-cabundle=true
-```
+The platform chart then declares the `Authorino` CR itself, with the cluster trust bundle mounted at `/etc/ssl/certs`. Nothing is patched by hand. The Kuadrant operator creates that CR only when it is missing. Once it exists, the operator server-side-applies just the TLS and tracing fields, so Argo keeps the CA volume, and upgrades keep it too.
 
-2. Mount it into Authorino:
+To use your own CA bundle instead of the cluster one, set `authorino.trustedCA.configMap` to a ConfigMap in `kuadrant-system`. It replaces the image's CAs, so it must hold the public CAs as well as yours.
 
-```bash
-oc patch authorino authorino -n kuadrant-system --type merge -p '{"spec":{"volumes":{"items":[{"name":"internal-ca","mountPath":"/etc/ssl/certs","configMaps":["internal-ca-bundle"],"items":[{"key":"ca-bundle.crt","path":"ca-bundle.crt"}]}]}}}'
-```
-
-This is still a manual step, because the Kuadrant operator owns the Authorino CR. If you only use API keys, you don't need it.
+Without Argo CD, apply `manifests/optional/authorino-trust-internal-ca.yaml` instead.
 
 ## Migrating off Routes/Ingress
 
