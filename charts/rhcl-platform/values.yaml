@@ -69,3 +69,7 @@ networkPolicies:
   # Ports the gateway uses to call Kuadrant (Authorino and Limitador defaults).
   authorinoGrpcPort: 50051
   limitadorGrpcPort: 8081
+  # Kuadrant 1.5+: the gateway downloads the Wasm module from the operator's server,
+  # kuadrant-operator-wasm.<namespace>.svc.cluster.local. Blocked, the gateway fails every request
+  # with 503 wasm_fail_stream.
+  wasmServerPort: 8082

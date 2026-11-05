@@ -1,7 +1,9 @@
 # Ingress allow-rules for clusters whose NetworkPolicies restrict traffic between namespaces.
 # Allow-only: they never block egress. But any policy that selects a pod turns on deny-by-default
 # for that pod's ingress, so delete this file if your cluster has no such restrictions.
-# The gateway asks Authorino (auth) and Limitador (rate limits) about every request.
+# The gateway asks Authorino (auth) and Limitador (rate limits) about every request, and loads
+# Kuadrant's Wasm module from the operator (8082, Kuadrant 1.5+). Without it the gateway fails
+# every request with 503 wasm_fail_stream.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -23,6 +25,8 @@ spec:
         - port: 50051
           protocol: TCP
         - port: 8081
+          protocol: TCP
+        - port: 8082
           protocol: TCP
 ---
 apiVersion: networking.k8s.io/v1

@@ -285,7 +285,7 @@ The policies only add **ingress** allow-rules for the platform's own pods:
 | istiod (`istio-system`) | gateway pods; namespaces labelled `istio-injection=enabled` or `istio.io/rev` | 15012 (config, certificates) |
 | istiod | API server (host network) | 15017 (injection and validation webhooks) |
 | gateway pods (`api-gateway`) | anywhere (clients via the LoadBalancer) | 80, 443 |
-| Authorino, Limitador (`kuadrant-system`) | gateway pods | 50051, 8081 |
+| Authorino, Limitador, the operator's Wasm server (`kuadrant-system`) | gateway pods | 50051, 8081, 8082 |
 | `kuadrant-system`, `servicemesh-operator`, `external-secrets` | API server (host network) | any (operator webhooks) |
 | `kuadrant-system` | `openshift-console` | any (console plugin) |
 | all of the above | same namespace; cluster monitoring | any |
@@ -300,9 +300,8 @@ The policies only add **ingress** allow-rules for the platform's own pods:
 | From | To | Port |
 |---|---|---|
 | gateway pods, sidecars | istiod | 15012 |
-| gateway pods | Authorino, Limitador | 50051, 8081 |
+| gateway pods | Authorino, Limitador, the operator's Wasm server | 50051, 8081, 8082 |
 | gateway pods | your backends | their container ports |
-| gateway pods | the registry hosting Kuadrant's Wasm module (`registry.redhat.io` or your mirror) | 443 |
 | istiod, operators, Authorino, External Secrets, istio-cni | API server | 6443 |
 | Authorino | your OIDC provider | 443 |
 | External Secrets | Vault | 8200 |
@@ -316,6 +315,7 @@ oc logs -n api-gateway deploy/api-gateway-istio | grep -i -m5 'istiod\|xds\|time
 ```
 
 - **The gateway can't reach Kuadrant.** Requests fail with `500`/`503`, and the gateway's log shows the Wasm filter failing to reach Authorino or Limitador.
+- **The gateway can't load Kuadrant's Wasm module.** Every request on every route fails with `503 wasm_fail_stream`. From Kuadrant 1.5, the gateway downloads the module from `http://kuadrant-operator-wasm.kuadrant-system.svc.cluster.local:8082/plugin.wasm`, so it needs port 8082 into `kuadrant-system`. Envoy resolves that name without the pod's DNS search domains, so only the full `.svc.cluster.local` name works. Earlier versions pulled it from `registry.redhat.io` instead.
 - **To see which policies apply** in a namespace:
 
 ```bash
