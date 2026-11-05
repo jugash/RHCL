@@ -5,10 +5,19 @@ metadata:
   namespace: {{ .Values.gateway.namespace }}
 spec:
   gatewayClassName: istio
-  {{- with .Values.gateway.serviceAnnotations }}
+  {{- if or .Values.gateway.serviceAnnotations .Values.gateway.dnsOptions }}
   infrastructure:
+    {{- with .Values.gateway.serviceAnnotations }}
     annotations:
       {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- if .Values.gateway.dnsOptions }}
+    # Istio merges this ConfigMap's "deployment" into the gateway Deployment it generates.
+    parametersRef:
+      group: ""
+      kind: ConfigMap
+      name: {{ .Values.gateway.name }}-options
+    {{- end }}
   {{- end }}
   listeners:
     {{- if .Values.gateway.httpRedirect }}
@@ -38,3 +47,19 @@ spec:
             matchLabels:
               {{- toYaml $.Values.gateway.accessLabel | nindent 14 }}
     {{- end }}
+{{- if .Values.gateway.dnsOptions }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.gateway.name }}-options
+  namespace: {{ .Values.gateway.namespace }}
+data:
+  deployment: |
+    spec:
+      template:
+        spec:
+          dnsConfig:
+            options:
+              {{- toYaml .Values.gateway.dnsOptions | nindent 14 }}
+{{- end }}

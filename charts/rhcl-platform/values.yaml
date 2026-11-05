@@ -41,6 +41,16 @@ gateway:
   serviceAnnotations: {}
   # Redirect plain HTTP to HTTPS.
   httpRedirect: true
+  # DNS options for the gateway pods. Kuadrant points the gateway at its own services by full name
+  # without a trailing dot, e.g. kuadrant-operator-wasm.kuadrant-system.svc.cluster.local (4 dots).
+  # With Kubernetes' default ndots 5, the pod tries every search domain in its resolv.conf before
+  # that name, so one search domain with a wildcard record or a DNS server that doesn't answer
+  # breaks the lookup, and the gateway fails every request with 503 wasm_fail_stream. ndots 4 looks
+  # such names up as written first. Set through the Gateway's parametersRef: needs Istio 1.26+
+  # (Service Mesh 3.1+). [] leaves the gateway pods' DNS alone.
+  dnsOptions:
+    - name: ndots
+      value: "4"
 
 tls:
   enabled: true

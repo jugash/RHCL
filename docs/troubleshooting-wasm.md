@@ -15,10 +15,13 @@ each gateway (label `kuadrant.io/wasm=true`) tells Envoy to:
 
 - download `http://kuadrant-operator-wasm.<operator namespace>.svc.cluster.local:8082/plugin.wasm`
   through its own Envoy cluster, `kuadrant-operator-wasm`. That cluster connects in plain
-  HTTP/2, has a 1-second connect timeout, and resolves the full `.svc.cluster.local` name;
-  it doesn't go through Istio's normal routing;
+  HTTP/2, has a 1-second connect timeout, and resolves the name through the pod's
+  `/etc/resolv.conf`, search domains included; it doesn't go through Istio's normal routing;
 - accept the file only if its sha256 matches the one in the EnvoyFilter. A mismatch counts as a
   failed download.
+
+**Envoy retries once.** Each download is retried once, about a second later, and then Envoy gives up
+until the next config change or restart.
 
 **`(cached)`** means a download failed less than 10 seconds earlier, so Envoy reuses that failure
 instead of trying again. Envoy creates no filter, and the Wasm filter fails closed, so every request
@@ -40,7 +43,36 @@ oc exec -n api-gateway deploy/api-gateway-istio -- pilot-agent request GET stats
 On a pod that started after the fix, `remote_load_fetch_failures` means the download still fails.
 `remote_load_fetch_successes: 1` with no failures means it works.
 
-## 1. Is port 8082 allowed?
+## 1. Does the name resolve through the search domains?
+
+The URL's hostname has 4 dots and no trailing dot. With Kubernetes' default `ndots:5`, the resolver
+tries every search domain in the pod's `/etc/resolv.conf` first and the name as written last. A
+search domain with a wildcard record returns the wrong address, and a DNS server that doesn't
+answer makes the lookup time out. Either way, every download fails at startup, on every restart.
+
+Compare the two lookups from any pod that has curl, for example in `api-gateway`:
+
+```bash
+curl -sS -m 5 -o /dev/null -w '%{http_code}\n' http://kuadrant-operator-wasm.kuadrant-system.svc.cluster.local.:8082/plugin.wasm
+```
+
+```bash
+curl -sS -m 5 -o /dev/null -w '%{http_code}\n' http://kuadrant-operator-wasm.kuadrant-system.svc.cluster.local:8082/plugin.wasm
+```
+
+If the first, with the trailing dot, prints `200` and the second fails, a search domain breaks the
+lookup. The gateway needs `ndots:4`, so that it looks up such names as written first: the chart sets
+it by default (`gateway.dnsOptions`), and so does `manifests/04-gateway/05-gateway-options.yaml`.
+Both need Istio 1.26+ (Service Mesh 3.1+). Check that the gateway pods got it:
+
+```bash
+oc get pods -n api-gateway -l gateway.networking.k8s.io/gateway-name=api-gateway -o jsonpath='{.items[0].spec.dnsConfig}{"\n"}'
+```
+
+To find the search domain at fault, read `search` in the pod's `/etc/resolv.conf` and look up the
+name with each domain appended. Your DNS team can then remove the wildcard or fix the server.
+
+## 2. Is port 8082 allowed?
 
 Only matters on clusters that restrict traffic between namespaces
 (`networkPolicies.enabled: true`):
@@ -52,7 +84,7 @@ oc get networkpolicy rhcl-kuadrant-from-gateway -n kuadrant-system -o jsonpath='
 You should see `50051 8081 8082`. The policy covers every pod in `kuadrant-system`, and 8082 is the
 operator pod's container port (`wasm`), not only the Service port.
 
-## 2. Which step of the download fails?
+## 3. Which step of the download fails?
 
 Envoy's `/clusters` page lists the `kuadrant-operator-wasm` cluster with each address it
 resolved and that address's connection counters. This needs no curl in the image:
@@ -69,11 +101,11 @@ finds nothing even when the download works.
 |---|---|---|
 | No lines at all | The gateway has no `kuadrant-operator-wasm` cluster, so Envoy has nowhere to send the download | Check that the EnvoyFilter adds it: `oc get envoyfilter -n api-gateway -l kuadrant.io/wasm=true -o yaml \| grep -A2 'applyTo: CLUSTER'` |
 | Lines such as `observability_name`, but none with `<IP>:8082` | The gateway can't resolve the hostname | Check that the Service exists: `oc get svc kuadrant-operator-wasm -n kuadrant-system` |
-| `<IP>:8082::cx_connect_fail` greater than 0 | The gateway can't connect: the traffic is dropped, or nothing listens on 8082 | Step 3; if the server runs, look for another NetworkPolicy, an AdminNetworkPolicy, or a firewall between nodes |
-| `<IP>:8082::rq_error` greater than 0 | The server answers with a 5xx error | Step 3 |
-| `<IP>:8082::rq_success` greater than 0 | The server answers, but with a 4xx or with a file that doesn't match | Step 4 |
+| `<IP>:8082::cx_connect_fail` greater than 0 | The gateway can't connect: the traffic is dropped, or nothing listens on 8082 | Step 4; if the server runs, look for another NetworkPolicy, an AdminNetworkPolicy, or a firewall between nodes |
+| `<IP>:8082::rq_error` greater than 0 | The server answers with a 5xx error | Step 4 |
+| `<IP>:8082::rq_success` greater than 0 | The server answers, but with a 4xx or with a file that doesn't match | Step 5 |
 
-## 3. Is the Wasm server running?
+## 4. Is the Wasm server running?
 
 ```bash
 oc get endpoints kuadrant-operator-wasm -n kuadrant-system
@@ -83,7 +115,7 @@ No addresses means the operator pod isn't ready. If it is ready but the connecti
 Wasm server didn't start: the operator skips it when `/wasm/plugin.wasm` is missing from its image.
 Its log says `wasm file not found, server will not start`.
 
-## 4. Does the sha256 match?
+## 5. Does the sha256 match?
 
 The checksum the gateway expects. This needs no exec rights:
 
@@ -105,7 +137,7 @@ oc get envoyfilter -n api-gateway -l kuadrant.io/wasm=true -o jsonpath='{range .
   oc exec -n api-gateway deploy/api-gateway-istio -- sh -c 'curl -s http://kuadrant-operator-wasm.kuadrant-system.svc.cluster.local:8082/plugin.wasm | sha256sum'
   ```
 
-## 5. Restart the gateway
+## 6. Restart the gateway
 
 After fixing the cause, restart the gateway (see "Recovery needs a restart" above). Then check that
 `remote_load_fetch_failures` stays at 0.

@@ -8,7 +8,7 @@ can't use Helm or Argo CD. Everything is applied with `oc`.
 | 01 | `01-operators/` | Service Mesh 3 operator (`servicemesh-operator`), Connectivity Link operator (`kuadrant-system`) | both CSVs `Succeeded` |
 | 02 | `02-mesh/` | IstioCNI, Istio control plane, mesh-wide mTLS mode | Istio `Ready`, GatewayClass `istio` accepted |
 | 03 | `03-kuadrant/` | Kuadrant (Authorino, Limitador, policy controllers) | Kuadrant `Ready` |
-| 04 | `04-gateway/` | Shared gateway, TLSPolicy, HTTP→HTTPS redirect, default deny and default rate limit | Gateway `Programmed` |
+| 04 | `04-gateway/` | Shared gateway (with `ndots:4` for its pods' DNS, Istio 1.26+), TLSPolicy, HTTP→HTTPS redirect, default deny and default rate limit | Gateway `Programmed` |
 | 05 | `05-vault-store/` | ClusterSecretStore for API keys in Vault | store `Ready` (skipped without External Secrets) |
 
 Each step needs the CRDs from the step before it, so apply them in order and wait in between.

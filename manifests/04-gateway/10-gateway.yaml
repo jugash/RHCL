@@ -7,10 +7,15 @@ metadata:
   namespace: api-gateway
 spec:
   gatewayClassName: istio
-  # Optional: pin the LoadBalancer IP so the DNS record stays valid (MetalLB example).
-  # infrastructure:
-  #   annotations:
-  #     metallb.io/loadBalancerIPs: 10.0.0.50
+  infrastructure:
+    # Optional: pin the LoadBalancer IP so the DNS record stays valid (MetalLB example).
+    # annotations:
+    #   metallb.io/loadBalancerIPs: 10.0.0.50
+    # DNS options for the gateway pods, see 05-gateway-options.yaml.
+    parametersRef:
+      group: ""
+      kind: ConfigMap
+      name: api-gateway-options
   listeners:
     # Only the redirect route (same namespace) may attach to plain HTTP.
     - name: http

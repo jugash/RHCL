@@ -1,0 +1,21 @@
+# DNS options for the gateway pods, referenced by the Gateway's parametersRef (Istio 1.26+, Service
+# Mesh 3.1+). Istio merges "deployment" into the gateway Deployment it generates.
+# Kuadrant points the gateway at its own services by full name without a trailing dot, e.g.
+# kuadrant-operator-wasm.kuadrant-system.svc.cluster.local (4 dots). With Kubernetes' default
+# ndots 5, the pod tries every search domain in its resolv.conf before that name, so one search
+# domain with a wildcard record or a DNS server that doesn't answer breaks the lookup, and the
+# gateway fails every request with 503 wasm_fail_stream. ndots 4 looks such names up as written first.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-gateway-options
+  namespace: api-gateway
+data:
+  deployment: |
+    spec:
+      template:
+        spec:
+          dnsConfig:
+            options:
+              - name: ndots
+                value: "4"
