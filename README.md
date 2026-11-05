@@ -50,6 +50,7 @@ site/               values for this cluster
 apis/               one file per API
 examples/           test APIs as plain manifests, each in its own rhcl-ex-* namespace
 oidc-clients/       example Keycloak clients for API callers (not deployed)
+docs/               troubleshooting guides
 manifests/          the platform as plain manifests + oc-only apply.sh, for clusters without Helm/Argo CD
 vault/setup.sh      one-time Vault configuration (run by a Vault admin)
 scripts/
@@ -315,7 +316,7 @@ oc logs -n api-gateway deploy/api-gateway-istio | grep -i -m5 'istiod\|xds\|time
 ```
 
 - **The gateway can't reach Kuadrant.** Requests fail with `500`/`503`, and the gateway's log shows the Wasm filter failing to reach Authorino or Limitador.
-- **The gateway can't load Kuadrant's Wasm module.** Every request on every route fails with `503 wasm_fail_stream`. From Kuadrant 1.5, the gateway downloads the module from `http://kuadrant-operator-wasm.kuadrant-system.svc.cluster.local:8082/plugin.wasm`, so it needs port 8082 into `kuadrant-system`. Envoy resolves that name without the pod's DNS search domains, so only the full `.svc.cluster.local` name works. Earlier versions pulled it from `registry.redhat.io` instead.
+- **The gateway can't load Kuadrant's Wasm module.** Every request on every route fails with `503 wasm_fail_stream`. From Kuadrant 1.5, the gateway downloads the module from `http://kuadrant-operator-wasm.kuadrant-system.svc.cluster.local:8082/plugin.wasm`, so it needs port 8082 into `kuadrant-system`. Envoy resolves that name without the pod's DNS search domains, so only the full `.svc.cluster.local` name works. Earlier versions pulled it from `registry.redhat.io` instead. If it still fails with port 8082 open, see [docs/troubleshooting-wasm.md](docs/troubleshooting-wasm.md).
 - **To see which policies apply** in a namespace:
 
 ```bash
