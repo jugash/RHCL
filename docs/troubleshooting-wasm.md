@@ -54,19 +54,24 @@ operator pod's container port (`wasm`), not only the Service port.
 
 ## 2. Which step of the download fails?
 
-Envoy keeps counters for the `kuadrant-operator-wasm` cluster. This needs no curl in the image:
+Envoy's `/clusters` page lists the `kuadrant-operator-wasm` cluster with each address it
+resolved and that address's connection counters. This needs no curl in the image:
 
 ```bash
-oc exec -n api-gateway deploy/api-gateway-istio -- pilot-agent request GET stats | grep -E '^cluster\.kuadrant-operator-wasm\.(upstream_cx_(total|connect_fail|connect_timeout|destroy_remote)|upstream_rq_[0-9]xx|membership_total)'
+oc exec -n api-gateway deploy/api-gateway-istio -- pilot-agent request GET clusters | grep '^kuadrant-operator-wasm::'
 ```
+
+The `stats` page isn't useful here: by default Istio keeps only a few of Envoy's statistics
+(`wasm.*` among them, not `cluster.kuadrant-operator-wasm.*`), so a grep for the cluster there
+finds nothing even when the download works.
 
 | You see | Meaning | Next |
 |---|---|---|
-| `membership_total: 0` | The gateway can't resolve the hostname | Check that the Service exists: `oc get svc kuadrant-operator-wasm -n kuadrant-system` |
-| `upstream_cx_connect_timeout` greater than 0 | Something drops the traffic | Look for another NetworkPolicy, an AdminNetworkPolicy, or a firewall between nodes |
-| `upstream_cx_connect_fail` greater than 0, no timeouts | The connection is refused: nothing listens on 8082 | Step 3 |
-| `upstream_rq_4xx` or `upstream_rq_5xx` | The server answers with an error instead of the file | Step 3 |
-| `upstream_rq_2xx` greater than 0 | The download works, but the file doesn't match | Step 4 |
+| No lines at all | The gateway has no `kuadrant-operator-wasm` cluster, so Envoy has nowhere to send the download | Check that the EnvoyFilter adds it: `oc get envoyfilter -n api-gateway -l kuadrant.io/wasm=true -o yaml \| grep -A2 'applyTo: CLUSTER'` |
+| Lines such as `observability_name`, but none with `<IP>:8082` | The gateway can't resolve the hostname | Check that the Service exists: `oc get svc kuadrant-operator-wasm -n kuadrant-system` |
+| `<IP>:8082::cx_connect_fail` greater than 0 | The gateway can't connect: the traffic is dropped, or nothing listens on 8082 | Step 3; if the server runs, look for another NetworkPolicy, an AdminNetworkPolicy, or a firewall between nodes |
+| `<IP>:8082::rq_error` greater than 0 | The server answers with a 5xx error | Step 3 |
+| `<IP>:8082::rq_success` greater than 0 | The server answers, but with a 4xx or with a file that doesn't match | Step 4 |
 
 ## 3. Is the Wasm server running?
 
